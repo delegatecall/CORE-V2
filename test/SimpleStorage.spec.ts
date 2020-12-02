@@ -1,16 +1,13 @@
-import { expect, use } from 'chai'
+import { expect } from 'chai'
 import { Contract } from 'ethers'
-import { deployContract, MockProvider, solidity } from 'ethereum-waffle'
-import SimpleStorage from '../build/SimpleStorage.json'
-
-use(solidity)
+import { ethers } from 'hardhat'
 
 describe('Simple Storage', () => {
-  const [wallet, walletTo] = new MockProvider().getWallets()
   let storage: Contract
-
   beforeEach(async () => {
-    storage = await deployContract(wallet, SimpleStorage)
+    const SimpleStorage = await ethers.getContractFactory('SimpleStorage')
+    storage = await SimpleStorage.deploy()
+    await storage.deployed()
   })
 
   it('Should get the initial storage value successfully', async () => {

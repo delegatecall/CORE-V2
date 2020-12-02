@@ -17,15 +17,16 @@ contract CORELoanFactory is Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
 
     address public CORE;
-    ICORELoanService public coreLoanService;
+    address public loanServiceAddress;
     address[] public allLoans;
 
     event LoanCreated(address indexed borrower, uint256 sizeInCORE);
 
-    function initialize(address _loanServiceAddr) public initializer {
+    function initialize() public initializer {
         OwnableUpgradeSafe.__Ownable_init();
         CORE = 0x62359Ed7505Efc61FF1D56fEF82158CcaffA23D7;
-        coreLoanService = ICORELoanService(_loanServiceAddr);
+        // TODO assign proper loanserviceaddress
+        loanServiceAddress = CORE;
     }
 
     function allLoansLength() external view returns (uint256) {
@@ -39,15 +40,19 @@ contract CORELoanFactory is Initializable, OwnableUpgradeSafe {
         uint256 _loanDuration, // maybe change to a smaller uint type?
         uint256 _interestRate // maybe change to a smaller uint type?
     ) external returns (address loan) {
-        require(_collateral == CORE, 'only support CORE');
-        uint256 maxEth = coreLoanService.getMaximumEthBorrowing(_collateralAmount);
+        require(_collateral == CORE, 'only support CORE as collateral asset');
+
+        uint256 maxEth = getMaximumEthBorrowing(_collateralAmount);
         require(_ethBorrowing <= maxEth, 'borrow too much');
 
         validateInterestRate(_interestRate);
         validateLoanDuration(_loanDuration);
+
         loan = address(new CORELoan(msg.sender, _collateralAmount, _ethBorrowing, _loanDuration, _interestRate));
         safeTransferFrom(CORE, msg.sender, loan, _collateralAmount);
+
         allLoans.push(loan);
+
         emit LoanCreated(msg.sender, _collateralAmount);
     }
 
@@ -61,6 +66,13 @@ contract CORELoanFactory is Initializable, OwnableUpgradeSafe {
         // bytes4(keccak256(bytes('transferFrom(address,address,uint256)')));
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0x23b872dd, from, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))));
+    }
+
+    function getMaximumEthBorrowing(uint256 _coreAmount) internal pure returns (uint256) {
+        //TODO implement later
+
+        return _coreAmount.mul(1);
+        //return coreLoanService.getMaximumEthBorrowing(_coreAmount);
     }
 
     // maybe move this to the loanservice contract

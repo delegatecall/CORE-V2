@@ -18,7 +18,7 @@ contract CORELoan {
     uint256 public loanDueDate;
 
     // the days between loan mature and borrow can repossess
-    uint256 public waitingPeriod = 2 days;
+    uint256 public gracePeriod = 2 days;
 
     address public CORE = 0x62359Ed7505Efc61FF1D56fEF82158CcaffA23D7;
 
@@ -76,7 +76,7 @@ contract CORELoan {
 
     function payLoan() public payable {
         require(block.timestamp >= loanDueDate);
-        require(block.timestamp <= loanDueDate + waitingPeriod);
+        require(block.timestamp <= loanDueDate + gracePeriod);
         require(msg.value == payoffAmount);
 
         // TODO implement return core to borrower and return eth to leander safely
@@ -87,7 +87,7 @@ contract CORELoan {
     }
 
     function repossess() public {
-        require(block.timestamp > loanDueDate + waitingPeriod);
+        require(block.timestamp > loanDueDate + gracePeriod);
 
         // TODO transfer core to lender safely
 
