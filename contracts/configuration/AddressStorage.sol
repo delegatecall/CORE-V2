@@ -1,4 +1,7 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+// COPYRIGHT cVault.finance TEAM
+
+pragma solidity 0.6.12
 
 contract AddressStorage {
     mapping(bytes32 => address) private addresses;
