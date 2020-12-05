@@ -106,23 +106,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         uint256 _timestamp
     );
 
-    /**
-     * @dev emitted when a user performs a rate swap
-     * @param _reserve the address of the reserve
-     * @param _user the address of the user executing the swap
-     * @param _newRateMode the new interest rate mode
-     * @param _newRate the new borrow rate
-     * @param _borrowBalanceIncrease the balance increase since the last action
-     * @param _timestamp the timestamp of the action
-     **/
-    event Swap(
-        address indexed _reserve,
-        address indexed _user,
-        uint256 _newRateMode,
-        uint256 _newRate,
-        uint256 _borrowBalanceIncrease,
-        uint256 _timestamp
-    );
 
     /**
      * @dev emitted when a user enables a reserve as collateral
@@ -137,40 +120,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      * @param _user the address of the user
      **/
     event ReserveUsedAsCollateralDisabled(address indexed _reserve, address indexed _user);
-
-    /**
-     * @dev emitted when the stable rate of a user gets rebalanced
-     * @param _reserve the address of the reserve
-     * @param _user the address of the user for which the rebalance has been executed
-     * @param _newStableRate the new stable borrow rate after the rebalance
-     * @param _borrowBalanceIncrease the balance increase since the last action
-     * @param _timestamp the timestamp of the action
-     **/
-    event RebalanceStableBorrowRate(
-        address indexed _reserve,
-        address indexed _user,
-        uint256 _newStableRate,
-        uint256 _borrowBalanceIncrease,
-        uint256 _timestamp
-    );
-
-    /**
-     * @dev emitted when a flashloan is executed
-     * @param _target the address of the flashLoanReceiver
-     * @param _reserve the address of the reserve
-     * @param _amount the amount requested
-     * @param _totalFee the total fee on the amount
-     * @param _protocolFee the part of the fee for the protocol
-     * @param _timestamp the timestamp of the action
-     **/
-    event FlashLoan(
-        address indexed _target,
-        address indexed _reserve,
-        uint256 _amount,
-        uint256 _totalFee,
-        uint256 _protocolFee,
-        uint256 _timestamp
-    );
 
     /**
      * @dev these events are not emitted directly by the LendingPool
@@ -265,11 +214,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);
 
-    uint256 public constant LENDINGPOOL_REVISION = 0x3;
-
-    function getRevision() internal pure returns (uint256) {
-        return LENDINGPOOL_REVISION;
-    }
 
     /**
      * @dev this function is invoked by the proxy contract when the LendingPool contract is added to the
@@ -368,7 +312,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         uint256 availableLiquidity;
         uint256 reserveDecimals;
         uint256 finalUserBorrowRate;
-        CoreLibrary.InterestRateMode rateMode;
         bool healthFactorBelowThreshold;
     }
 
@@ -377,12 +320,10 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      * already deposited enough collateral.
      * @param _reserve the address of the reserve
      * @param _amount the amount to be borrowed
-     * @param _interestRateMode the interest rate mode at which the user wants to borrow. Can be 0 (STABLE) or 1 (VARIABLE)
      **/
     function borrow(
         address _reserve,
         uint256 _amount,
-        uint256 _interestRateMode,
         uint16 _referralCode
     )
         external
@@ -402,9 +343,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
                 uint256(CoreLibrary.InterestRateMode.STABLE) == _interestRateMode,
             'Invalid interest rate mode selected'
         );
-
-        //cast the rateMode to coreLibrary.interestRateMode
-        vars.rateMode = CoreLibrary.InterestRateMode(_interestRateMode);
 
         //check that the amount is available in the reserve
         vars.availableLiquidity = core.getReserveAvailableLiquidity(_reserve);
@@ -445,30 +383,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             'There is not enough collateral to cover a new borrow'
         );
 
-        /**
-         * Following conditions need to be met if the user is borrowing at a stable rate:
-         * 1. Reserve must be enabled for stable rate borrowing
-         * 2. Users cannot borrow from the reserve if their collateral is (mostly) the same currency
-         *    they are borrowing, to prevent abuses.
-         * 3. Users will be able to borrow only a relatively small, configurable amount of the total
-         *    liquidity
-         **/
-
-        if (vars.rateMode == CoreLibrary.InterestRateMode.STABLE) {
-            //check if the borrow mode is stable and if stable rate borrowing is enabled on this reserve
-            require(
-                core.isUserAllowedToBorrowAtStable(_reserve, msg.sender, _amount),
-                'User cannot borrow the selected amount with a stable rate'
-            );
-
-            //calculate the max available loan size in stable rate mode as a percentage of the
-            //available liquidity
-            uint256 maxLoanPercent = parametersProvider.getMaxStableRateBorrowSizePercent();
-            uint256 maxLoanSizeStable = vars.availableLiquidity.mul(maxLoanPercent).div(100);
-
-            require(_amount <= maxLoanSizeStable, 'User is trying to borrow too much liquidity at a stable rate');
-        }
-
         //all conditions passed - borrow is accepted
         (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = core.updateStateOnBorrow(
             _reserve,
@@ -485,7 +399,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             _reserve,
             msg.sender,
             _amount,
-            _interestRateMode,
             vars.finalUserBorrowRate,
             vars.borrowFee,
             vars.borrowBalanceIncrease,
@@ -612,110 +525,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     }
 
     /**
-     * @dev borrowers can user this function to swap between stable and variable borrow rate modes.
-     * @param _reserve the address of the reserve on which the user borrowed
-     **/
-    function swapBorrowRateMode(address _reserve)
-        external
-        nonReentrant
-        onlyActiveReserve(_reserve)
-        onlyUnfreezedReserve(_reserve)
-    {
-        (uint256 principalBorrowBalance, uint256 compoundedBorrowBalance, uint256 borrowBalanceIncrease) = core
-            .getUserBorrowBalances(_reserve, msg.sender);
-
-        require(compoundedBorrowBalance > 0, 'User does not have a borrow in progress on this reserve');
-
-        CoreLibrary.InterestRateMode currentRateMode = core.getUserCurrentBorrowRateMode(_reserve, msg.sender);
-
-        if (currentRateMode == CoreLibrary.InterestRateMode.VARIABLE) {
-            /**
-             * user wants to swap to stable, before swapping we need to ensure that
-             * 1. stable borrow rate is enabled on the reserve
-             * 2. user is not trying to abuse the reserve by depositing
-             * more collateral than he is borrowing, artificially lowering
-             * the interest rate, borrowing at variable, and switching to stable
-             **/
-            require(
-                core.isUserAllowedToBorrowAtStable(_reserve, msg.sender, compoundedBorrowBalance),
-                'User cannot borrow the selected amount at stable'
-            );
-        }
-
-        (CoreLibrary.InterestRateMode newRateMode, uint256 newBorrowRate) = core.updateStateOnSwapRate(
-            _reserve,
-            msg.sender,
-            principalBorrowBalance,
-            compoundedBorrowBalance,
-            borrowBalanceIncrease,
-            currentRateMode
-        );
-
-        emit Swap(
-            _reserve,
-            msg.sender,
-            uint256(newRateMode),
-            newBorrowRate,
-            borrowBalanceIncrease,
-            //solium-disable-next-line
-            block.timestamp
-        );
-    }
-
-    /**
-     * @dev rebalances the stable interest rate of a user if current liquidity rate > user stable rate.
-     * this is regulated by Aave to ensure that the protocol is not abused, and the user is paying a fair
-     * rate. Anyone can call this function though.
-     * @param _reserve the address of the reserve
-     * @param _user the address of the user to be rebalanced
-     **/
-    function rebalanceStableBorrowRate(address _reserve, address _user)
-        external
-        nonReentrant
-        onlyActiveReserve(_reserve)
-    {
-        (, uint256 compoundedBalance, uint256 borrowBalanceIncrease) = core.getUserBorrowBalances(_reserve, _user);
-
-        //step 1: user must be borrowing on _reserve at a stable rate
-        require(compoundedBalance > 0, 'User does not have any borrow for this reserve');
-
-        require(
-            core.getUserCurrentBorrowRateMode(_reserve, _user) == CoreLibrary.InterestRateMode.STABLE,
-            'The user borrow is variable and cannot be rebalanced'
-        );
-
-        uint256 userCurrentStableRate = core.getUserCurrentStableBorrowRate(_reserve, _user);
-        uint256 liquidityRate = core.getReserveCurrentLiquidityRate(_reserve);
-        uint256 reserveCurrentStableRate = core.getReserveCurrentStableBorrowRate(_reserve);
-        uint256 rebalanceDownRateThreshold = reserveCurrentStableRate.rayMul(
-            WadRayMath.ray().add(parametersProvider.getRebalanceDownRateDelta())
-        );
-
-        //step 2: we have two possible situations to rebalance:
-
-        //1. user stable borrow rate is below the current liquidity rate. The loan needs to be rebalanced,
-        //as this situation can be abused (user putting back the borrowed liquidity in the same reserve to earn on it)
-        //2. user stable rate is above the market avg borrow rate of a certain delta, and utilization rate is low.
-        //In this case, the user is paying an interest that is too high, and needs to be rescaled down.
-        if (userCurrentStableRate < liquidityRate || userCurrentStableRate > rebalanceDownRateThreshold) {
-            uint256 newStableRate = core.updateStateOnRebalance(_reserve, _user, borrowBalanceIncrease);
-
-            emit RebalanceStableBorrowRate(
-                _reserve,
-                _user,
-                newStableRate,
-                borrowBalanceIncrease,
-                //solium-disable-next-line
-                block.timestamp
-            );
-
-            return;
-        }
-
-        revert('Interest rate rebalance conditions were not met');
-    }
-
-    /**
      * @dev allows depositors to enable or disable a specific deposit as collateral.
      * @param _reserve the address of the reserve
      * @param _useAsCollateral true if the user wants to user the deposit as collateral, false otherwise.
@@ -781,63 +590,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             //error found
             revert(string(abi.encodePacked('Liquidation failed: ', returnMessage)));
         }
-    }
-
-    /**
-     * @dev allows smartcontracts to access the liquidity of the pool within one transaction,
-     * as long as the amount taken plus a fee is returned. NOTE There are security concerns for developers of flashloan receiver contracts
-     * that must be kept into consideration. For further details please visit https://developers.aave.com
-     * @param _receiver The address of the contract receiving the funds. The receiver should implement the IFlashLoanReceiver interface.
-     * @param _reserve the address of the principal reserve
-     * @param _amount the amount requested for this flashloan
-     **/
-    function flashLoan(
-        address _receiver,
-        address _reserve,
-        uint256 _amount,
-        bytes memory _params
-    ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
-        //check that the reserve has enough available liquidity
-        //we avoid using the getAvailableLiquidity() function in LendingPoolCore to save gas
-        uint256 availableLiquidityBefore = _reserve == EthAddressLib.ethAddress()
-            ? address(core).balance
-            : IERC20(_reserve).balanceOf(address(core));
-
-        require(availableLiquidityBefore >= _amount, 'There is not enough liquidity available to borrow');
-
-        (uint256 totalFeeBips, uint256 protocolFeeBips) = parametersProvider.getFlashLoanFeesInBips();
-        //calculate amount fee
-        uint256 amountFee = _amount.mul(totalFeeBips).div(10000);
-
-        //protocol fee is the part of the amountFee reserved for the protocol - the rest goes to depositors
-        uint256 protocolFee = amountFee.mul(protocolFeeBips).div(10000);
-        require(amountFee > 0 && protocolFee > 0, 'The requested amount is too small for a flashLoan.');
-
-        //get the FlashLoanReceiver instance
-        IFlashLoanReceiver receiver = IFlashLoanReceiver(_receiver);
-
-        address payable userPayable = address(uint160(_receiver));
-
-        //transfer funds to the receiver
-        core.transferToUser(_reserve, userPayable, _amount);
-
-        //execute action of the receiver
-        receiver.executeOperation(_reserve, _amount, amountFee, _params);
-
-        //check that the actual balance of the core contract includes the returned amount
-        uint256 availableLiquidityAfter = _reserve == EthAddressLib.ethAddress()
-            ? address(core).balance
-            : IERC20(_reserve).balanceOf(address(core));
-
-        require(
-            availableLiquidityAfter == availableLiquidityBefore.add(amountFee),
-            'The actual balance of the protocol is inconsistent'
-        );
-
-        core.updateStateOnFlashLoan(_reserve, availableLiquidityBefore, amountFee.sub(protocolFee), protocolFee);
-
-        //solium-disable-next-line
-        emit FlashLoan(_receiver, _reserve, _amount, amountFee, protocolFee, block.timestamp);
     }
 
     /**
