@@ -8,7 +8,7 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 import "../libraries/openzeppelin-upgradeability/VersionedInitializable.sol";
 import "../configuration/LendingPoolAddressesProvider.sol";
 import "./LendingPoolCore.sol";
-import "../tokenization/AToken.sol";
+import "../tokenization/CToken.sol";
 
 /**
 * @title LendingPoolConfigurator contract
@@ -23,12 +23,12 @@ contract LendingPoolConfigurator is VersionedInitializable {
     /**
     * @dev emitted when a reserve is initialized.
     * @param _reserve the address of the reserve
-    * @param _aToken the address of the overlying aToken contract
+    * @param _cToken the address of the overlying cToken contract
     * @param _interestRateStrategyAddress the address of the interest rate strategy for the reserve
     **/
     event ReserveInitialized(
         address indexed _reserve,
-        address indexed _aToken,
+        address indexed _cToken,
         address _interestRateStrategyAddress
     );
 
@@ -180,13 +180,13 @@ contract LendingPoolConfigurator is VersionedInitializable {
     ) external onlyLendingPoolManager {
         ERC20Detailed asset = ERC20Detailed(_reserve);
 
-        string memory aTokenName = string(abi.encodePacked("Aave Interest bearing ", asset.name()));
-        string memory aTokenSymbol = string(abi.encodePacked("a", asset.symbol()));
+        string memory cTokenName = string(abi.encodePacked("Aave Interest bearing ", asset.name()));
+        string memory cTokensymbol = string(abi.encodePacked("a", asset.symbol()));
 
         initReserveWithData(
             _reserve,
-            aTokenName,
-            aTokenSymbol,
+            cTokenName,
+            cTokensymbol,
             _underlyingAssetDecimals,
             _interestRateStrategyAddress
         );
@@ -194,39 +194,39 @@ contract LendingPoolConfigurator is VersionedInitializable {
     }
 
     /**
-    * @dev initializes a reserve using aTokenData provided externally (useful if the underlying ERC20 contract doesn't expose name or decimals)
+    * @dev initializes a reserve using cTokenData provided externally (useful if the underlying ERC20 contract doesn't expose name or decimals)
     * @param _reserve the address of the reserve to be initialized
-    * @param _aTokenName the name of the aToken contract
-    * @param _aTokenSymbol the symbol of the aToken contract
+    * @param _cTokenName the name of the cToken contract
+    * @param _cTokensymbol the symbol of the cToken contract
     * @param _underlyingAssetDecimals the decimals of the reserve underlying asset
     * @param _interestRateStrategyAddress the address of the interest rate strategy contract for this reserve
     **/
     function initReserveWithData(
         address _reserve,
-        string memory _aTokenName,
-        string memory _aTokenSymbol,
+        string memory _cTokenName,
+        string memory _cTokensymbol,
         uint8 _underlyingAssetDecimals,
         address _interestRateStrategyAddress
     ) public onlyLendingPoolManager {
         LendingPoolCore core = LendingPoolCore(poolAddressesProvider.getLendingPoolCore());
 
-        AToken aTokenInstance = new AToken(
+        CToken cTokenInstance = new CToken(
             poolAddressesProvider,
             _reserve,
             _underlyingAssetDecimals,
-            _aTokenName,
-            _aTokenSymbol
+            _cTokenName,
+            _cTokensymbol
         );
         core.initReserve(
             _reserve,
-            address(aTokenInstance),
+            address(cTokenInstance),
             _underlyingAssetDecimals,
             _interestRateStrategyAddress
         );
 
         emit ReserveInitialized(
             _reserve,
-            address(aTokenInstance),
+            address(cTokenInstance),
             _interestRateStrategyAddress
         );
     }

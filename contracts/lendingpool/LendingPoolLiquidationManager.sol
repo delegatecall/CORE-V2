@@ -11,7 +11,7 @@ import "../libraries/openzeppelin-upgradeability/VersionedInitializable.sol";
 
 import "../configuration/LendingPoolAddressesProvider.sol";
 import "../configuration/LendingPoolParametersProvider.sol";
-import "../tokenization/AToken.sol";
+import "../tokenization/CToken.sol";
 import "../libraries/CoreLibrary.sol";
 import "../libraries/WadRayMath.sol";
 import "./LendingPoolCore.sol";
@@ -64,7 +64,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
     * @param _liquidatedCollateralAmount the amount of collateral being liquidated
     * @param _accruedBorrowInterest the amount of interest accrued by the borrower since the last action
     * @param _liquidator the address of the liquidator
-    * @param _receiveAToken true if the liquidator wants to receive aTokens, false otherwise
+    * @param _receiveCToken true if the liquidator wants to receive cTokens, false otherwise
     * @param _timestamp the timestamp of the action
     **/
     event LiquidationCall(
@@ -75,7 +75,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
         uint256 _liquidatedCollateralAmount,
         uint256 _accruedBorrowInterest,
         address _liquidator,
-        bool _receiveAToken,
+        bool _receiveCToken,
         uint256 _timestamp
     );
 
@@ -121,7 +121,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
     * @param _reserve the address of the principal reserve
     * @param _user the address of the borrower
     * @param _purchaseAmount the amount of principal that the liquidator wants to repay
-    * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
+    * @param _receiveCToken true if the liquidators wants to receive the cTokens, false if
     * he wants to receive the underlying asset directly
     **/
     function liquidationCall(
@@ -129,7 +129,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
         address _reserve,
         address _user,
         uint256 _purchaseAmount,
-        bool _receiveAToken
+        bool _receiveCToken
     ) external payable returns (uint256, string memory) {
         // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
         LiquidationCallLocalVars memory vars;
@@ -219,7 +219,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
         }
 
         //if liquidator reclaims the underlying asset, we make sure there is enough available collateral in the reserve
-        if (!_receiveAToken) {
+        if (!_receiveCToken) {
             uint256 currentAvailableCollateral = core.getReserveAvailableLiquidity(_collateral);
             if (currentAvailableCollateral < maxCollateralToLiquidate) {
                 return (
@@ -238,18 +238,18 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
             vars.feeLiquidated,
             vars.liquidatedCollateralForFee,
             vars.borrowBalanceIncrease,
-            _receiveAToken
+            _receiveCToken
         );
 
-        AToken collateralAtoken = AToken(core.getReserveATokenAddress(_collateral));
+        CToken collateralcToken = CToken(core.getReserveCTokenAddress(_collateral));
 
-        //if liquidator reclaims the aToken, he receives the equivalent atoken amount
-        if (_receiveAToken) {
-            collateralAtoken.transferOnLiquidation(_user, msg.sender, maxCollateralToLiquidate);
+        //if liquidator reclaims the cToken, he receives the equivalent cToken amount
+        if (_receiveCToken) {
+            collateralcToken.transferOnLiquidation(_user, msg.sender, maxCollateralToLiquidate);
         } else {
             //otherwise receives the underlying asset
-            //burn the equivalent amount of atoken
-            collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
+            //burn the equivalent amount of cToken
+            collateralcToken.burnOnLiquidation(_user, maxCollateralToLiquidate);
             core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);
         }
 
@@ -258,8 +258,8 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
 
         if (vars.feeLiquidated > 0) {
             //if there is enough collateral to liquidate the fee, first transfer burn an equivalent amount of
-            //aTokens of the user
-            collateralAtoken.burnOnLiquidation(_user, vars.liquidatedCollateralForFee);
+            //cTokens of the user
+            collateralcToken.burnOnLiquidation(_user, vars.liquidatedCollateralForFee);
 
             //then liquidate the fee by transferring it to the fee collection address
             core.liquidateFee(
@@ -287,7 +287,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
             maxCollateralToLiquidate,
             vars.borrowBalanceIncrease,
             msg.sender,
-            _receiveAToken,
+            _receiveCToken,
             //solium-disable-next-line
             block.timestamp
         );

@@ -11,7 +11,7 @@ import "../configuration/LendingPoolAddressesProvider.sol";
 import "../libraries/WadRayMath.sol";
 import "../interfaces/IPriceOracleGetter.sol";
 import "../interfaces/IFeeProvider.sol";
-import "../tokenization/AToken.sol";
+import "../tokenization/CToken.sol";
 
 import "./LendingPoolCore.sol";
 
@@ -386,7 +386,7 @@ contract LendingPoolDataProvider is VersionedInitializable {
             uint256 utilizationRate,
             uint256 liquidityIndex,
             uint256 variableBorrowIndex,
-            address aTokenAddress,
+            address cTokenAddress,
             uint40 lastUpdateTimestamp
         )
     {
@@ -401,7 +401,7 @@ contract LendingPoolDataProvider is VersionedInitializable {
         utilizationRate = core.getReserveUtilizationRate(_reserve);
         liquidityIndex = core.getReserveLiquidityCumulativeIndex(_reserve);
         variableBorrowIndex = core.getReserveVariableBorrowsCumulativeIndex(_reserve);
-        aTokenAddress = core.getReserveATokenAddress(_reserve);
+        cTokenAddress = core.getReserveCTokenAddress(_reserve);
         lastUpdateTimestamp = core.getReserveLastUpdate(_reserve);
     }
 
@@ -442,7 +442,7 @@ contract LendingPoolDataProvider is VersionedInitializable {
         external
         view
         returns (
-            uint256 currentATokenBalance,
+            uint256 currentCTokenBalance,
             uint256 currentBorrowBalance,
             uint256 principalBorrowBalance,
             uint256 borrowRateMode,
@@ -454,7 +454,7 @@ contract LendingPoolDataProvider is VersionedInitializable {
             bool usageAsCollateralEnabled
         )
     {
-        currentATokenBalance = AToken(core.getReserveATokenAddress(_reserve)).balanceOf(_user);
+        currentCTokenBalance = CToken(core.getReserveCTokenAddress(_reserve)).balanceOf(_user);
         CoreLibrary.InterestRateMode mode = core.getUserCurrentBorrowRateMode(_reserve, _user);
         (principalBorrowBalance, currentBorrowBalance, ) = core.getUserBorrowBalances(
             _reserve,

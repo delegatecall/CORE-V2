@@ -11,7 +11,7 @@ import '../libraries/openzeppelin-upgradeability/VersionedInitializable.sol';
 
 import '../configuration/LendingPoolAddressesProvider.sol';
 import '../configuration/LendingPoolParametersProvider.sol';
-import '../tokenization/AToken.sol';
+import '../tokenization/CToken.sol';
 import '../libraries/CoreLibrary.sol';
 import '../libraries/WadRayMath.sol';
 import '../interfaces/IFeeProvider.sol';
@@ -206,7 +206,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      * @param _liquidatedCollateralAmount the amount of collateral being liquidated
      * @param _accruedBorrowInterest the amount of interest accrued by the borrower since the last action
      * @param _liquidator the address of the liquidator
-     * @param _receiveAToken true if the liquidator wants to receive aTokens, false otherwise
+     * @param _receiveCToken true if the liquidator wants to receive cTokens, false otherwise
      * @param _timestamp the timestamp of the action
      **/
     event LiquidationCall(
@@ -217,19 +217,19 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         uint256 _liquidatedCollateralAmount,
         uint256 _accruedBorrowInterest,
         address _liquidator,
-        bool _receiveAToken,
+        bool _receiveCToken,
         uint256 _timestamp
     );
 
     /**
      * @dev functions affected by this modifier can only be invoked by the
-     * aToken.sol contract
+     * cToken.sol contract
      * @param _reserve the address of the reserve
      **/
-    modifier onlyOverlyingAToken(address _reserve) {
+    modifier onlyOverlyingCToken(address _reserve) {
         require(
-            msg.sender == core.getReserveATokenAddress(_reserve),
-            'The caller of this function can only be the aToken contract of this reserve'
+            msg.sender == core.getReserveCTokenAddress(_reserve),
+            'The caller of this function can only be the cToken contract of this reserve'
         );
         _;
     }
@@ -285,7 +285,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     }
 
     /**
-     * @dev deposits The underlying asset into the reserve. A corresponding amount of the overlying asset (aTokens)
+     * @dev deposits The underlying asset into the reserve. A corresponding amount of the overlying asset (cTokens)
      * is minted.
      * @param _reserve the address of the reserve
      * @param _amount the amount to be deposited
@@ -303,14 +303,14 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         onlyUnfreezedReserve(_reserve)
         onlyAmountGreaterThanZero(_amount)
     {
-        AToken aToken = AToken(core.getReserveATokenAddress(_reserve));
+        CToken cToken = CToken(core.getReserveCTokenAddress(_reserve));
 
-        bool isFirstDeposit = aToken.balanceOf(msg.sender) == 0;
+        bool isFirstDeposit = cToken.balanceOf(msg.sender) == 0;
 
         core.updateStateOnDeposit(_reserve, msg.sender, _amount, isFirstDeposit);
 
-        //minting AToken to user 1:1 with the specific exchange rate
-        aToken.mintOnDeposit(msg.sender, _amount);
+        //minting CToken to user 1:1 with the specific exchange rate
+        cToken.mintOnDeposit(msg.sender, _amount);
 
         //transfer to the core contract
         core.transferToReserve.value(msg.value)(_reserve, msg.sender, _amount);
@@ -321,7 +321,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
 
     /**
      * @dev Redeems the underlying amount of assets requested by _user.
-     * This function is executed by the overlying aToken contract in response to a redeem action.
+     * This function is executed by the overlying cToken contract in response to a redeem action.
      * @param _reserve the address of the reserve
      * @param _user the address of the user performing the action
      * @param _amount the underlying amount to be redeemed
@@ -330,18 +330,18 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _reserve,
         address payable _user,
         uint256 _amount,
-        uint256 _aTokenBalanceAfterRedeem
+        uint256 _cTokenBalanceAfterRedeem
     )
         external
         nonReentrant
-        onlyOverlyingAToken(_reserve)
+        onlyOverlyingCToken(_reserve)
         onlyActiveReserve(_reserve)
         onlyAmountGreaterThanZero(_amount)
     {
         uint256 currentAvailableLiquidity = core.getReserveAvailableLiquidity(_reserve);
         require(currentAvailableLiquidity >= _amount, 'There is not enough liquidity available to redeem');
 
-        core.updateStateOnRedeem(_reserve, _user, _amount, _aTokenBalanceAfterRedeem == 0);
+        core.updateStateOnRedeem(_reserve, _user, _amount, _cTokenBalanceAfterRedeem == 0);
 
         core.transferToUser(_reserve, _user, _amount);
 
@@ -750,7 +750,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      * @param _reserve the address of the principal reserve
      * @param _user the address of the borrower
      * @param _purchaseAmount the amount of principal that the liquidator wants to repay
-     * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
+     * @param _receiveCToken true if the liquidators wants to receive the cTokens, false if
      * he wants to receive the underlying asset directly
      **/
     function liquidationCall(
@@ -758,7 +758,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _reserve,
         address _user,
         uint256 _purchaseAmount,
-        bool _receiveAToken
+        bool _receiveCToken
     ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
         address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
 
@@ -770,7 +770,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
                 _reserve,
                 _user,
                 _purchaseAmount,
-                _receiveAToken
+                _receiveCToken
             )
         );
         require(success, 'Liquidation call failed');
@@ -876,7 +876,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             uint256 utilizationRate,
             uint256 liquidityIndex,
             uint256 variableBorrowIndex,
-            address aTokenAddress,
+            address cTokenAddress,
             uint40 lastUpdateTimestamp
         )
     {
@@ -904,7 +904,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         external
         view
         returns (
-            uint256 currentATokenBalance,
+            uint256 currentCTokenBalance,
             uint256 currentBorrowBalance,
             uint256 principalBorrowBalance,
             uint256 borrowRateMode,
