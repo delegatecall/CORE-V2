@@ -19,6 +19,7 @@ import './LendingPoolCore.sol';
 import './LendingPoolDataProvider.sol';
 import '../libraries/EthAddressLib.sol';
 import '../interfaces/ILendingPoolFacade';
+import '../interfaces/ILendingPoolAddressesService.sol';
 
 /**
  * @title CORE Lending Pool Facade contract
@@ -31,9 +32,9 @@ contract LendingPoolFacade is ILendPoolFacade, Initializable, OwnableUpgradeSafe
     using WadRayMath for uint256;
     using Address for address;
 
-    LendingPoolAddressesProvider public addressesProvider;
-    LendingPoolCore public core;
-    LendingPoolDataProvider public dataProvider;
+    ILendingPoolAddressesService public addressesService;
+    // LendingPoolCore public core;
+    // LendingPoolDataProvider public dataProvider;
     LendingPoolTreasury public treasury;
 
     /**
@@ -118,31 +119,6 @@ contract LendingPoolFacade is ILendPoolFacade, Initializable, OwnableUpgradeSafe
      * @param _user the address of the user
      **/
     event ReserveUsedAsCollateralDisabled(address indexed _reserve, address indexed _user);
-
-    /**
-     * @dev these events are not emitted directly by the LendingPool
-     * but they are declared here as the LendingPoolLiquidationManager
-     * is executed using a delegateCall().
-     * This allows to have the events in the generated ABI for LendingPool.
-     **/
-
-    /**
-     * @dev emitted when a borrow fee is liquidated
-     * @param _collateral the address of the collateral being liquidated
-     * @param _reserve the address of the reserve
-     * @param _user the address of the user being liquidated
-     * @param _feeLiquidated the total fee liquidated
-     * @param _liquidatedCollateralForFee the amount of collateral received by the protocol in exchange for the fee
-     * @param _timestamp the timestamp of the action
-     **/
-    event OriginationFeeLiquidated(
-        address indexed _collateral,
-        address indexed _reserve,
-        address indexed _user,
-        uint256 _feeLiquidated,
-        uint256 _liquidatedCollateralForFee,
-        uint256 _timestamp
-    );
 
     /**
      * @dev emitted when a borrower is liquidated
