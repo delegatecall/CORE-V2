@@ -18,14 +18,15 @@ import '../libraries/WadRayMath.sol';
 import './LendingPoolCore.sol';
 import './LendingPoolDataProvider.sol';
 import '../libraries/EthAddressLib.sol';
+import '../interfaces/ILendingPoolFacade';
 
 /**
- * @title LendingPool contract
- * @notice Implements the actions of the LendingPool, and exposes accessory methods to fetch the users and reserve data
- * @author Aave
+ * @title CORE Lending Pool Facade contract
+ * @notice Implements the Lending related actions
+ * @author CORE
  **/
 
-contract LendingPool is Initializable, OwnableUpgradeSafe {
+contract LendingPoolFacade is ILendPoolFacade, Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
     using WadRayMath for uint256;
     using Address for address;
@@ -33,6 +34,7 @@ contract LendingPool is Initializable, OwnableUpgradeSafe {
     LendingPoolAddressesProvider public addressesProvider;
     LendingPoolCore public core;
     LendingPoolDataProvider public dataProvider;
+    LendingPoolTreasury public treasury;
 
     /**
      * @dev emitted on deposit

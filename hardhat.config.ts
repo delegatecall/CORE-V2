@@ -18,6 +18,9 @@ const config: HardhatUserConfig =  {
       },
     },
   },
+  paths:{
+    sources:'./contracts/wip'
+  }
 }
 
 export default config
