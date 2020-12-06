@@ -1,13 +1,16 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+// COPYRIGHT cVault.finance TEAM
 
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "./WadRayMath.sol";
+pragma solidity 0.6.12;
+
+import '@openzeppelin/contracts/math/SafeMath.sol';
+import './WadRayMath.sol';
 
 /**
-* @title CoreLibrary library
-* @author Aave
-* @notice Defines the data structures of the reserves and the user data
-**/
+ * @title CoreLibrary library
+ * @author Aave
+ * @notice Defines the data structures of the reserves and the user data
+ **/
 library CoreLibrary {
     using SafeMath for uint256;
     using WadRayMath for uint256;
@@ -32,8 +35,8 @@ library CoreLibrary {
 
     struct ReserveData {
         /**
-        * @dev refer to the whitepaper, section 1.1 basic concepts for a formal description of these properties.
-        **/
+         * @dev refer to the whitepaper, section 1.1 basic concepts for a formal description of these properties.
+         **/
         //the liquidity index. Expressed in ray
         uint256 lastLiquidityCumulativeIndex;
         //the current supply rate. Expressed in ray
@@ -59,12 +62,12 @@ library CoreLibrary {
         //the decimals of the reserve asset
         uint256 decimals;
         /**
-        * @dev address of the aToken representing the asset
-        **/
-        address aTokenAddress;
+         * @dev address of the cToken representing the asset
+         **/
+        address cTokenAddress;
         /**
-        * @dev address of the interest rate strategy contract
-        **/
+         * @dev address of the interest rate strategy contract
+         **/
         address interestRateStrategyAddress;
         uint40 lastUpdateTimestamp;
         // borrowingEnabled = true means users can borrow from this reserve
@@ -80,34 +83,25 @@ library CoreLibrary {
     }
 
     /**
-    * @dev returns the ongoing normalized income for the reserve.
-    * a value of 1e27 means there is no income. As time passes, the income is accrued.
-    * A value of 2*1e27 means that the income of the reserve is double the initial amount.
-    * @param _reserve the reserve object
-    * @return the normalized income. expressed in ray
-    **/
-    function getNormalizedIncome(CoreLibrary.ReserveData storage _reserve)
-        internal
-        view
-        returns (uint256)
-    {
-        uint256 cumulated = calculateLinearInterest(
-            _reserve
-                .currentLiquidityRate,
-            _reserve
-                .lastUpdateTimestamp
-        )
-            .rayMul(_reserve.lastLiquidityCumulativeIndex);
+     * @dev returns the ongoing normalized income for the reserve.
+     * a value of 1e27 means there is no income. As time passes, the income is accrued.
+     * A value of 2*1e27 means that the income of the reserve is double the initial amount.
+     * @param _reserve the reserve object
+     * @return the normalized income. expressed in ray
+     **/
+    function getNormalizedIncome(CoreLibrary.ReserveData storage _reserve) internal view returns (uint256) {
+        uint256 cumulated = calculateLinearInterest(_reserve.currentLiquidityRate, _reserve.lastUpdateTimestamp).rayMul(
+            _reserve.lastLiquidityCumulativeIndex
+        );
 
         return cumulated;
-
     }
 
     /**
-    * @dev Updates the liquidity cumulative index Ci and variable borrow cumulative index Bvc. Refer to the whitepaper for
-    * a formal specification.
-    * @param _self the reserve object
-    **/
+     * @dev Updates the liquidity cumulative index Ci and variable borrow cumulative index Bvc. Refer to the whitepaper for
+     * a formal specification.
+     * @param _self the reserve object
+     **/
     function updateCumulativeIndexes(ReserveData storage _self) internal {
         uint256 totalBorrows = getTotalBorrows(_self);
 
@@ -118,9 +112,7 @@ library CoreLibrary {
                 _self.lastUpdateTimestamp
             );
 
-            _self.lastLiquidityCumulativeIndex = cumulatedLiquidityInterest.rayMul(
-                _self.lastLiquidityCumulativeIndex
-            );
+            _self.lastLiquidityCumulativeIndex = cumulatedLiquidityInterest.rayMul(_self.lastLiquidityCumulativeIndex);
 
             uint256 cumulatedVariableBorrowInterest = calculateCompoundedInterest(
                 _self.currentVariableBorrowRate,
@@ -133,12 +125,12 @@ library CoreLibrary {
     }
 
     /**
-    * @dev accumulates a predefined amount of asset to the reserve as a fixed, one time income. Used for example to accumulate
-    * the flashloan fee to the reserve, and spread it through the depositors.
-    * @param _self the reserve object
-    * @param _totalLiquidity the total liquidity available in the reserve
-    * @param _amount the amount to accomulate
-    **/
+     * @dev accumulates a predefined amount of asset to the reserve as a fixed, one time income. Used for example to accumulate
+     * the flashloan fee to the reserve, and spread it through the depositors.
+     * @param _self the reserve object
+     * @param _totalLiquidity the total liquidity available in the reserve
+     * @param _amount the amount to accomulate
+     **/
     function cumulateToLiquidityIndex(
         ReserveData storage _self,
         uint256 _totalLiquidity,
@@ -148,25 +140,23 @@ library CoreLibrary {
 
         uint256 cumulatedLiquidity = amountToLiquidityRatio.add(WadRayMath.ray());
 
-        _self.lastLiquidityCumulativeIndex = cumulatedLiquidity.rayMul(
-            _self.lastLiquidityCumulativeIndex
-        );
+        _self.lastLiquidityCumulativeIndex = cumulatedLiquidity.rayMul(_self.lastLiquidityCumulativeIndex);
     }
 
     /**
-    * @dev initializes a reserve
-    * @param _self the reserve object
-    * @param _aTokenAddress the address of the overlying atoken contract
-    * @param _decimals the number of decimals of the underlying asset
-    * @param _interestRateStrategyAddress the address of the interest rate strategy contract
-    **/
+     * @dev initializes a reserve
+     * @param _self the reserve object
+     * @param _cTokenAddress the address of the overlying ctoken contract
+     * @param _decimals the number of decimals of the underlying asset
+     * @param _interestRateStrategyAddress the address of the interest rate strategy contract
+     **/
     function init(
         ReserveData storage _self,
-        address _aTokenAddress,
+        address _cTokenAddress,
         uint256 _decimals,
         address _interestRateStrategyAddress
     ) external {
-        require(_self.aTokenAddress == address(0), "Reserve has already been initialized");
+        require(_self.cTokenAddress == address(0), 'Reserve has already been initialized');
 
         if (_self.lastLiquidityCumulativeIndex == 0) {
             //if the reserve has not been initialized yet
@@ -177,80 +167,71 @@ library CoreLibrary {
             _self.lastVariableBorrowCumulativeIndex = WadRayMath.ray();
         }
 
-        _self.aTokenAddress = _aTokenAddress;
+        _self.cTokenAddress = _cTokenAddress;
         _self.decimals = _decimals;
 
         _self.interestRateStrategyAddress = _interestRateStrategyAddress;
         _self.isActive = true;
         _self.isFreezed = false;
-
     }
 
     /**
-    * @dev enables borrowing on a reserve
-    * @param _self the reserve object
-    * @param _stableBorrowRateEnabled true if the stable borrow rate must be enabled by default, false otherwise
-    **/
+     * @dev enables borrowing on a reserve
+     * @param _self the reserve object
+     * @param _stableBorrowRateEnabled true if the stable borrow rate must be enabled by default, false otherwise
+     **/
     function enableBorrowing(ReserveData storage _self, bool _stableBorrowRateEnabled) external {
-        require(_self.borrowingEnabled == false, "Reserve is already enabled");
+        require(_self.borrowingEnabled == false, 'Reserve is already enabled');
 
         _self.borrowingEnabled = true;
         _self.isStableBorrowRateEnabled = _stableBorrowRateEnabled;
-
     }
 
     /**
-    * @dev disables borrowing on a reserve
-    * @param _self the reserve object
-    **/
+     * @dev disables borrowing on a reserve
+     * @param _self the reserve object
+     **/
     function disableBorrowing(ReserveData storage _self) external {
         _self.borrowingEnabled = false;
     }
 
     /**
-    * @dev enables a reserve to be used as collateral
-    * @param _self the reserve object
-    * @param _baseLTVasCollateral the loan to value of the asset when used as collateral
-    * @param _liquidationThreshold the threshold at which loans using this asset as collateral will be considered undercollateralized
-    * @param _liquidationBonus the bonus liquidators receive to liquidate this asset
-    **/
+     * @dev enables a reserve to be used as collateral
+     * @param _self the reserve object
+     * @param _baseLTVasCollateral the loan to value of the asset when used as collateral
+     * @param _liquidationThreshold the threshold at which loans using this asset as collateral will be considered undercollateralized
+     * @param _liquidationBonus the bonus liquidators receive to liquidate this asset
+     **/
     function enableAsCollateral(
         ReserveData storage _self,
         uint256 _baseLTVasCollateral,
         uint256 _liquidationThreshold,
         uint256 _liquidationBonus
     ) external {
-        require(
-            _self.usageAsCollateralEnabled == false,
-            "Reserve is already enabled as collateral"
-        );
+        require(_self.usageAsCollateralEnabled == false, 'Reserve is already enabled as collateral');
 
         _self.usageAsCollateralEnabled = true;
         _self.baseLTVasCollateral = _baseLTVasCollateral;
         _self.liquidationThreshold = _liquidationThreshold;
         _self.liquidationBonus = _liquidationBonus;
 
-        if (_self.lastLiquidityCumulativeIndex == 0)
-            _self.lastLiquidityCumulativeIndex = WadRayMath.ray();
-
+        if (_self.lastLiquidityCumulativeIndex == 0) _self.lastLiquidityCumulativeIndex = WadRayMath.ray();
     }
 
     /**
-    * @dev disables a reserve as collateral
-    * @param _self the reserve object
-    **/
+     * @dev disables a reserve as collateral
+     * @param _self the reserve object
+     **/
     function disableAsCollateral(ReserveData storage _self) external {
         _self.usageAsCollateralEnabled = false;
     }
 
-
-
     /**
-    * @dev calculates the compounded borrow balance of a user
-    * @param _self the userReserve object
-    * @param _reserve the reserve object
-    * @return the user compounded borrow balance
-    **/
+     * @dev calculates the compounded borrow balance of a user
+     * @param _self the userReserve object
+     * @param _reserve the reserve object
+     * @return the user compounded borrow balance
+     **/
     function getCompoundedBorrowBalance(
         CoreLibrary.UserReserveData storage _self,
         CoreLibrary.ReserveData storage _reserve
@@ -262,10 +243,7 @@ library CoreLibrary {
         uint256 cumulatedInterest = 0;
 
         if (_self.stableBorrowRate > 0) {
-            cumulatedInterest = calculateCompoundedInterest(
-                _self.stableBorrowRate,
-                _self.lastUpdateTimestamp
-            );
+            cumulatedInterest = calculateCompoundedInterest(_self.stableBorrowRate, _self.lastUpdateTimestamp);
         } else {
             //variable interest
             cumulatedInterest = calculateCompoundedInterest(
@@ -294,12 +272,12 @@ library CoreLibrary {
     }
 
     /**
-    * @dev increases the total borrows at a stable rate on a specific reserve and updates the
-    * average stable rate consequently
-    * @param _reserve the reserve object
-    * @param _amount the amount to add to the total borrows stable
-    * @param _rate the rate at which the amount has been borrowed
-    **/
+     * @dev increases the total borrows at a stable rate on a specific reserve and updates the
+     * average stable rate consequently
+     * @param _reserve the reserve object
+     * @param _amount the amount to add to the total borrows stable
+     * @param _rate the rate at which the amount has been borrowed
+     **/
     function increaseTotalBorrowsStableAndUpdateAverageRate(
         ReserveData storage _reserve,
         uint256 _amount,
@@ -316,24 +294,24 @@ library CoreLibrary {
             _reserve.currentAverageStableBorrowRate
         );
 
-        _reserve.currentAverageStableBorrowRate = weightedLastBorrow
-            .add(weightedPreviousTotalBorrows)
-            .rayDiv(_reserve.totalBorrowsStable.wadToRay());
+        _reserve.currentAverageStableBorrowRate = weightedLastBorrow.add(weightedPreviousTotalBorrows).rayDiv(
+            _reserve.totalBorrowsStable.wadToRay()
+        );
     }
 
     /**
-    * @dev decreases the total borrows at a stable rate on a specific reserve and updates the
-    * average stable rate consequently
-    * @param _reserve the reserve object
-    * @param _amount the amount to substract to the total borrows stable
-    * @param _rate the rate at which the amount has been repaid
-    **/
+     * @dev decreases the total borrows at a stable rate on a specific reserve and updates the
+     * average stable rate consequently
+     * @param _reserve the reserve object
+     * @param _amount the amount to substract to the total borrows stable
+     * @param _rate the rate at which the amount has been repaid
+     **/
     function decreaseTotalBorrowsStableAndUpdateAverageRate(
         ReserveData storage _reserve,
         uint256 _amount,
         uint256 _rate
     ) internal {
-        require(_reserve.totalBorrowsStable >= _amount, "Invalid amount to decrease");
+        require(_reserve.totalBorrowsStable >= _amount, 'Invalid amount to decrease');
 
         uint256 previousTotalBorrowStable = _reserve.totalBorrowsStable;
 
@@ -352,50 +330,43 @@ library CoreLibrary {
             _reserve.currentAverageStableBorrowRate
         );
 
-        require(
-            weightedPreviousTotalBorrows >= weightedLastBorrow,
-            "The amounts to subtract don't match"
-        );
+        require(weightedPreviousTotalBorrows >= weightedLastBorrow, "The amounts to subtract don't match");
 
-        _reserve.currentAverageStableBorrowRate = weightedPreviousTotalBorrows
-            .sub(weightedLastBorrow)
-            .rayDiv(_reserve.totalBorrowsStable.wadToRay());
+        _reserve.currentAverageStableBorrowRate = weightedPreviousTotalBorrows.sub(weightedLastBorrow).rayDiv(
+            _reserve.totalBorrowsStable.wadToRay()
+        );
     }
 
     /**
-    * @dev increases the total borrows at a variable rate
-    * @param _reserve the reserve object
-    * @param _amount the amount to add to the total borrows variable
-    **/
+     * @dev increases the total borrows at a variable rate
+     * @param _reserve the reserve object
+     * @param _amount the amount to add to the total borrows variable
+     **/
     function increaseTotalBorrowsVariable(ReserveData storage _reserve, uint256 _amount) internal {
         _reserve.totalBorrowsVariable = _reserve.totalBorrowsVariable.add(_amount);
     }
 
     /**
-    * @dev decreases the total borrows at a variable rate
-    * @param _reserve the reserve object
-    * @param _amount the amount to substract to the total borrows variable
-    **/
+     * @dev decreases the total borrows at a variable rate
+     * @param _reserve the reserve object
+     * @param _amount the amount to substract to the total borrows variable
+     **/
     function decreaseTotalBorrowsVariable(ReserveData storage _reserve, uint256 _amount) internal {
         require(
             _reserve.totalBorrowsVariable >= _amount,
-            "The amount that is being subtracted from the variable total borrows is incorrect"
+            'The amount that is being subtracted from the variable total borrows is incorrect'
         );
         _reserve.totalBorrowsVariable = _reserve.totalBorrowsVariable.sub(_amount);
     }
 
     /**
-    * @dev function to calculate the interest using a linear interest rate formula
-    * @param _rate the interest rate, in ray
-    * @param _lastUpdateTimestamp the timestamp of the last update of the interest
-    * @return the interest rate linearly accumulated during the timeDelta, in ray
-    **/
+     * @dev function to calculate the interest using a linear interest rate formula
+     * @param _rate the interest rate, in ray
+     * @param _lastUpdateTimestamp the timestamp of the last update of the interest
+     * @return the interest rate linearly accumulated during the timeDelta, in ray
+     **/
 
-    function calculateLinearInterest(uint256 _rate, uint40 _lastUpdateTimestamp)
-        internal
-        view
-        returns (uint256)
-    {
+    function calculateLinearInterest(uint256 _rate, uint40 _lastUpdateTimestamp) internal view returns (uint256) {
         //solium-disable-next-line
         uint256 timeDifference = block.timestamp.sub(uint256(_lastUpdateTimestamp));
 
@@ -405,16 +376,12 @@ library CoreLibrary {
     }
 
     /**
-    * @dev function to calculate the interest using a compounded interest rate formula
-    * @param _rate the interest rate, in ray
-    * @param _lastUpdateTimestamp the timestamp of the last update of the interest
-    * @return the interest rate compounded during the timeDelta, in ray
-    **/
-    function calculateCompoundedInterest(uint256 _rate, uint40 _lastUpdateTimestamp)
-        internal
-        view
-        returns (uint256)
-    {
+     * @dev function to calculate the interest using a compounded interest rate formula
+     * @param _rate the interest rate, in ray
+     * @param _lastUpdateTimestamp the timestamp of the last update of the interest
+     * @return the interest rate compounded during the timeDelta, in ray
+     **/
+    function calculateCompoundedInterest(uint256 _rate, uint40 _lastUpdateTimestamp) internal view returns (uint256) {
         //solium-disable-next-line
         uint256 timeDifference = block.timestamp.sub(uint256(_lastUpdateTimestamp));
 
@@ -424,16 +391,11 @@ library CoreLibrary {
     }
 
     /**
-    * @dev returns the total borrows on the reserve
-    * @param _reserve the reserve object
-    * @return the total borrows (stable + variable)
-    **/
-    function getTotalBorrows(CoreLibrary.ReserveData storage _reserve)
-        internal
-        view
-        returns (uint256)
-    {
+     * @dev returns the total borrows on the reserve
+     * @param _reserve the reserve object
+     * @return the total borrows (stable + variable)
+     **/
+    function getTotalBorrows(CoreLibrary.ReserveData storage _reserve) internal view returns (uint256) {
         return _reserve.totalBorrowsStable.add(_reserve.totalBorrowsVariable);
     }
-
 }

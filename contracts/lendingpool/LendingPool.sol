@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 // COPYRIGHT cVault.finance TEAM
 
-pragma solidity 0.6.12
+pragma solidity 0.6.12;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
+import '@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol';
+import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
+
 import '../configuration/LendingPoolAddressesProvider.sol';
-import '../configuration/LendingPoolParametersProvider.sol';
 import '../tokenization/CToken.sol';
 import '../libraries/CoreLibrary.sol';
 import '../libraries/WadRayMath.sol';
-import '../interfaces/IFeeProvider.sol';
 import './LendingPoolCore.sol';
 import './LendingPoolDataProvider.sol';
-import './LendingPoolLiquidationManager.sol';
 import '../libraries/EthAddressLib.sol';
 
 /**
@@ -25,7 +25,7 @@ import '../libraries/EthAddressLib.sol';
  * @author Aave
  **/
 
-contract LendingPool is ReentrancyGuard, VersionedInitializable {
+contract LendingPool is Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
     using WadRayMath for uint256;
     using Address for address;
@@ -33,8 +33,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     LendingPoolAddressesProvider public addressesProvider;
     LendingPoolCore public core;
     LendingPoolDataProvider public dataProvider;
-    LendingPoolParametersProvider public parametersProvider;
-    IFeeProvider feeProvider;
 
     /**
      * @dev emitted on deposit
@@ -104,7 +102,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         uint256 _borrowBalanceIncrease,
         uint256 _timestamp
     );
-
 
     /**
      * @dev emitted when a user enables a reserve as collateral
@@ -213,7 +210,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);
 
-
     /**
      * @dev this function is invoked by the proxy contract when the LendingPool contract is added to the
      * AddressesProvider.
@@ -223,8 +219,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         addressesProvider = _addressesProvider;
         core = LendingPoolCore(addressesProvider.getLendingPoolCore());
         dataProvider = LendingPoolDataProvider(addressesProvider.getLendingPoolDataProvider());
-        parametersProvider = LendingPoolParametersProvider(addressesProvider.getLendingPoolParametersProvider());
-        feeProvider = IFeeProvider(addressesProvider.getFeeProvider());
     }
 
     /**
@@ -238,14 +232,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _reserve,
         uint256 _amount,
         uint16 _referralCode
-    )
-        external
-        payable
-        nonReentrant
-        onlyActiveReserve(_reserve)
-        onlyUnfreezedReserve(_reserve)
-        onlyAmountGreaterThanZero(_amount)
-    {
+    ) external payable onlyActiveReserve(_reserve) onlyUnfreezedReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
         CToken cToken = CToken(core.getReserveCTokenAddress(_reserve));
 
         bool isFirstDeposit = cToken.balanceOf(msg.sender) == 0;
@@ -274,13 +261,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address payable _user,
         uint256 _amount,
         uint256 _cTokenBalanceAfterRedeem
-    )
-        external
-        nonReentrant
-        onlyOverlyingCToken(_reserve)
-        onlyActiveReserve(_reserve)
-        onlyAmountGreaterThanZero(_amount)
-    {
+    ) external onlyOverlyingCToken(_reserve) onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
         uint256 currentAvailableLiquidity = core.getReserveAvailableLiquidity(_reserve);
         require(currentAvailableLiquidity >= _amount, 'There is not enough liquidity available to redeem');
 
@@ -311,6 +292,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         uint256 availableLiquidity;
         uint256 reserveDecimals;
         uint256 finalUserBorrowRate;
+        CoreLibrary.InterestRateMode rateMode;
         bool healthFactorBelowThreshold;
     }
 
@@ -324,24 +306,13 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _reserve,
         uint256 _amount,
         uint16 _referralCode
-    )
-        external
-        nonReentrant
-        onlyActiveReserve(_reserve)
-        onlyUnfreezedReserve(_reserve)
-        onlyAmountGreaterThanZero(_amount)
-    {
+    ) external onlyActiveReserve(_reserve) onlyUnfreezedReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
         // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
         BorrowLocalVars memory vars;
 
         //check that the reserve is enabled for borrowing
         require(core.isReserveBorrowingEnabled(_reserve), 'Reserve is not enabled for borrowing');
         //validate interest rate mode
-        require(
-            uint256(CoreLibrary.InterestRateMode.VARIABLE) == _interestRateMode ||
-                uint256(CoreLibrary.InterestRateMode.STABLE) == _interestRateMode,
-            'Invalid interest rate mode selected'
-        );
 
         //check that the amount is available in the reserve
         vars.availableLiquidity = core.getReserveAvailableLiquidity(_reserve);
@@ -364,7 +335,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         require(!vars.healthFactorBelowThreshold, 'The borrower can already be liquidated so he cannot borrow more');
 
         //calculating fees
-        vars.borrowFee = feeProvider.calculateLoanOriginationFee(msg.sender, _amount);
+        vars.borrowFee = 10;
 
         require(vars.borrowFee > 0, 'The amount to borrow is too small');
 
@@ -398,6 +369,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             _reserve,
             msg.sender,
             _amount,
+            uint256(vars.rateMode),
             vars.finalUserBorrowRate,
             vars.borrowFee,
             vars.borrowBalanceIncrease,
@@ -431,7 +403,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _reserve,
         uint256 _amount,
         address payable _onBehalfOf
-    ) external payable nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
+    ) external payable onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
         // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
         RepayLocalVars memory vars;
 
@@ -458,28 +430,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         require(!vars.isETH || msg.value >= vars.paybackAmount, 'Invalid msg.value sent for the repayment');
 
         //if the amount is smaller than the origination fee, just transfer the amount to the fee destination address
-        if (vars.paybackAmount <= vars.originationFee) {
-            core.updateStateOnRepay(_reserve, _onBehalfOf, 0, vars.paybackAmount, vars.borrowBalanceIncrease, false);
-
-            core.transferToFeeCollectionAddress.value(vars.isETH ? vars.paybackAmount : 0)(
-                _reserve,
-                _onBehalfOf,
-                vars.paybackAmount,
-                addressesProvider.getTokenDistributor()
-            );
-
-            emit Repay(
-                _reserve,
-                _onBehalfOf,
-                msg.sender,
-                0,
-                vars.paybackAmount,
-                vars.borrowBalanceIncrease,
-                //solium-disable-next-line
-                block.timestamp
-            );
-            return;
-        }
 
         vars.paybackAmountMinusFees = vars.paybackAmount.sub(vars.originationFee);
 
@@ -491,16 +441,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             vars.borrowBalanceIncrease,
             vars.compoundedBorrowBalance == vars.paybackAmountMinusFees
         );
-
-        //if the user didn't repay the origination fee, transfer the fee to the fee collection address
-        if (vars.originationFee > 0) {
-            core.transferToFeeCollectionAddress.value(vars.isETH ? vars.originationFee : 0)(
-                _reserve,
-                msg.sender,
-                vars.originationFee,
-                addressesProvider.getTokenDistributor()
-            );
-        }
 
         //sending the total msg.value if the transfer is ETH.
         //the transferToReserve() function will take care of sending the
@@ -530,7 +470,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      **/
     function setUserUseReserveAsCollateral(address _reserve, bool _useAsCollateral)
         external
-        nonReentrant
         onlyActiveReserve(_reserve)
         onlyUnfreezedReserve(_reserve)
     {
@@ -567,29 +506,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
         address _user,
         uint256 _purchaseAmount,
         bool _receiveCToken
-    ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
-        address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
-
-        //solium-disable-next-line
-        (bool success, bytes memory result) = liquidationManager.delegatecall(
-            abi.encodeWithSignature(
-                'liquidationCall(address,address,address,uint256,bool)',
-                _collateral,
-                _reserve,
-                _user,
-                _purchaseAmount,
-                _receiveCToken
-            )
-        );
-        require(success, 'Liquidation call failed');
-
-        (uint256 returnCode, string memory returnMessage) = abi.decode(result, (uint256, string));
-
-        if (returnCode != 0) {
-            //error found
-            revert(string(abi.encodePacked('Liquidation failed: ', returnMessage)));
-        }
-    }
+    ) external payable onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {}
 
     /**
      * @dev accessory functions to fetch data from the core contract
@@ -622,8 +539,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             uint256 totalBorrowsVariable,
             uint256 liquidityRate,
             uint256 variableBorrowRate,
-            uint256 stableBorrowRate,
-            uint256 averageStableBorrowRate,
             uint256 utilizationRate,
             uint256 liquidityIndex,
             uint256 variableBorrowIndex,
@@ -658,7 +573,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
             uint256 currentCTokenBalance,
             uint256 currentBorrowBalance,
             uint256 principalBorrowBalance,
-            uint256 borrowRateMode,
             uint256 borrowRate,
             uint256 liquidityRate,
             uint256 originationFee,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.2;
+pragma solidity 0.6.12;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
 
@@ -67,10 +67,6 @@ library WadRayMath {
         return a.mul(WAD_RAY_RATIO);
     }
 
-    /**
-     * @dev calculates base^exp. The code uses the ModExp precompile
-     * @return base^exp, in ray
-     */
     //solium-disable-next-line
     function rayPow(uint256 x, uint256 n) internal pure returns (uint256 z) {
         z = n % 2 != 0 ? x : RAY;
