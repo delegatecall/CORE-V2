@@ -14,4 +14,10 @@ interface ICToken {
      * @param _amount the amount of tokens to mint
      */
     function mintOnDeposit(address _account, uint256 _amount) external;
+
+    /**
+     * @dev redeem CToken to get the native underlying asset
+     * @param _amount the amount being redeemed
+     **/
+    function redeem(uint256 _amount) external;
 }

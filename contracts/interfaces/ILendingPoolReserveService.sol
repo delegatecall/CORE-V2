@@ -48,7 +48,14 @@ interface ILendingPoolReserveService {
 
     function getReserveIsActive(address _reserve) external returns (bool);
 
-    function getReserveCTokenAddress(address _reserve) external returns (address);
+    function getReserveOverlyingTokenAddress(address _reserve) external returns (address);
 
     function getReserveNormalizedIncome(address _reserve) external view returns (uint256);
+
+    /**
+     * @dev gets the available liquidity in the reserve. The available liquidity is the balance of the core contract
+     * @param _reserve the reserve address
+     * @return the available liquidity
+     **/
+    function getReserveAvailableLiquidity(address _reserve) external view returns (uint256);
 }

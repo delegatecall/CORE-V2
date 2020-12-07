@@ -10,9 +10,10 @@ import '../libraries/ERC20.sol';
 import '../libraries/WadRayMath.sol';
 
 import '../interfaces/ICToken.sol';
+import '../interfaces/ILendingPoolFacade.sol';
 import '../interfaces/ILendingPoolAddressService.sol';
 import '../interfaces/ILendingPoolReserveService.sol';
-import '../interfaces/ILendingPoolFacade.sol';
+import '../interfaces/ILendingPoolDataQueryService.sol';
 
 /**
  * @title CORE interest bearing liquidty pool ERC20
@@ -23,14 +24,30 @@ contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);
 
+    /**
+     * @param _from the address performing the redeem
+     * @param _value the amount to be redeemed
+     * @param _fromBalanceIncrease the cumulated balance since the last update of the user
+     * @param _fromIndex the last index of the user
+     **/
+    event Redeem(address indexed _from, uint256 _value, uint256 _fromBalanceIncrease, uint256 _fromIndex);
+
+    /**
+     * @param _from the address performing the mint
+     * @param _value the amount to be minted
+     * @param _fromBalanceIncrease the cumulated balance since the last update of the user
+     * @param _fromIndex the last index of the user
+     **/
     event MintOnDeposit(address indexed _from, uint256 _value, uint256 _fromBalanceIncrease, uint256 _fromIndex);
 
     address public underlyingAssetAddress;
 
     mapping(address => uint256) private userIndexes;
+
+    ILendingPoolFacade private poolFacade;
     ILendingPoolAddressService private addressService;
     ILendingPoolReserveService private reserveService;
-    ILendingPoolFacade private poolFacade;
+    ILendingPoolDataQueryService private dataQueryService;
 
     modifier onlyLendingPool {
         require(msg.sender == address(poolFacade), 'The caller of this function must be a lending pool');
@@ -73,9 +90,49 @@ contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
         emit MintOnDeposit(_account, _amount, balanceIncrease, index);
     }
 
+    function redeem(uint256 _amount) external override {
+        require(_amount > 0, 'Amount to redeem needs to be > 0');
+
+        //cumulates the balance of the user
+        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = cumulateBalanceInternal(msg.sender);
+
+        uint256 amountToRedeem = _amount;
+
+        //if amount is equal to uint(-1), the user wants to redeem everything
+        if (_amount == UINT_MAX_VALUE) {
+            amountToRedeem = currentBalance;
+        }
+
+        require(amountToRedeem <= currentBalance, 'User cannot redeem more than the available balance');
+
+        //check that the user is allowed to redeem the amount
+        require(isTransferAllowed(msg.sender, amountToRedeem), 'Transfer cannot be allowed.');
+
+        // burns tokens equivalent to the amount requested
+        _burn(msg.sender, amountToRedeem);
+
+        bool userIndexReset = false;
+        //reset the user data if the remaining balance is 0
+        if (currentBalance.sub(amountToRedeem) == 0) {
+            userIndexReset = true;
+            userIndexes[msg.sender] = 0;
+        }
+
+        // executes redeem of the underlying asset
+        poolFacade.redeemUnderlying(
+            underlyingAssetAddress,
+            msg.sender,
+            amountToRedeem,
+            currentBalance.sub(amountToRedeem)
+        );
+
+        emit Redeem(msg.sender, amountToRedeem, balanceIncrease, userIndexReset ? 0 : index);
+    }
+
     function refreshConfigInternal() internal {
         poolFacade = ILendingPoolFacade(addressService.getLendingPoolFacadeAddress());
         reserveService = ILendingPoolReserveService(addressService.getLendingPoolReserveServiceAddress());
+        dataQueryService = ILendingPoolDataQueryService(addressService.getLendingPoolDataQueryServiceAddress());
     }
 
     function cumulateBalanceInternal(address _user)
@@ -105,5 +162,15 @@ contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
                 .rayMul(reserveService.getReserveNormalizedIncome(underlyingAssetAddress))
                 .rayDiv(userIndexes[_user])
                 .rayToWad();
+    }
+
+    /**
+     * @dev Used to validate transfers before actually executing them.
+     * @param _user address of the user to check
+     * @param _amount the amount to check
+     * @return true if the _user can transfer _amount, false otherwise
+     **/
+    function isTransferAllowed(address _user, uint256 _amount) public view returns (bool) {
+        return dataQueryService.getBalanceDecreaseIsAllowed(underlyingAssetAddress, _user, _amount);
     }
 }
