@@ -4,7 +4,8 @@
 pragma solidity 0.6.12;
 
 /**
- * @title this is CORE Lending Pool interest bearing wrapper over native ERC20 token
+ * @title this is CORE Lending Pool interest bearing wrapping token over native ERC20 token
+ * @dev It overrides some key ERC20 methods such as balanceOf(includes occured interest), transfer(check loan to value ration before transfer grante).
  */
 interface ICToken {
     /**

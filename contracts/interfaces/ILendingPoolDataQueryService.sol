@@ -5,6 +5,7 @@ pragma solidity 0.6.12;
 
 /**
  * @title this is CORE Lending Pool Aggegrated Data Query Service.
+ * @dev this is the Query part of CQRS, LendPoolFacade is the Command Part
  */
 interface ILendingPoolDataQueryService {
     /**

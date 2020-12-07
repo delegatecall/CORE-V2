@@ -3,4 +3,9 @@
 
 pragma solidity 0.6.12;
 
-interface ILendingPoolUserLoanDataService {}
+/**
+ * @title This provides required operation to update and query user loan information(balance, interest rate)
+ */
+interface ILendingPoolUserLoanDataService {
+
+}

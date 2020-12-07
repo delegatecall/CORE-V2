@@ -2,6 +2,9 @@
 
 pragma solidity 0.6.12;
 
+/**
+ * @dev This is CORE lending system services discovery
+ */
 interface ILendingPoolAddressService {
     function getLendingPoolFacadeAddress() external view returns (address);
 

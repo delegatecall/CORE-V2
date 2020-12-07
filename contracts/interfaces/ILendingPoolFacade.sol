@@ -3,6 +3,10 @@
 
 pragma solidity 0.6.12;
 
+/**
+ * @title this is the main entry to the CORE Lending system
+ * @dev implemeent the Facade pattern to provide an simple interface for user to interact with
+ */
 interface ILendingPoolFacade {
     /**
      * @dev deposits The underlying asset into the reserve. A corresponding amount of the overlying asset (cTokens)
