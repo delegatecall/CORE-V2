@@ -19,7 +19,7 @@ import '../interfaces/ILendingPoolDataQueryService.sol';
  * @title CORE interest bearing liquidty pool ERC20
  */
 
-contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
+contract CToken is ERC20UpgradeSafe, OwnableUpgradeSafe, ICToken {
     using WadRayMath for uint256;
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);

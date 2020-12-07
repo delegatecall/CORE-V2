@@ -61,4 +61,6 @@ interface ILendingPoolReserveService {
      * @return the available liquidity
      **/
     function getReserveAvailableLiquidity(address _reserve) external view returns (uint256);
+
+    function getReserveIsBorrowingEnabled(address _reserve) external returns (bool);
 }

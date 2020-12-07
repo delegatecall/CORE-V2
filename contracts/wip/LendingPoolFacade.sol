@@ -25,6 +25,8 @@ import '../interfaces/ILendingPoolUserLoanDataService.sol';
 import '../interfaces/ILendingPoolReserveService.sol';
 import '../interfaces/ILendingPoolTreasury.sol';
 import '../interfaces/ICToken.sol';
+import '../interfaces/ILendingPoolFeeService.sol';
+import '../interfaces/ILendingPoolDataQueryService.sol';
 
 /**
  * @title CORE Lending Pool Facade contract
@@ -37,10 +39,12 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
     using WadRayMath for uint256;
     using Address for address;
 
-    ILendingPoolAddressService public AddressService;
+    ILendingPoolAddressService public addressService;
     ILendingPoolTreasury private treasury;
     ILendingPoolReserveService private reserveService;
     ILendingPoolUserLoanDataService private userLoanDataService;
+    ILendingPoolFeeService private feeService;
+    ILendingPoolDataQueryService private dataQueryService;
 
     /**
      * @dev emitted on deposit
@@ -67,6 +71,28 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
      **/
     event RedeemUnderlying(address indexed _reserve, address indexed _user, uint256 _amount, uint256 _timestamp);
 
+    /**
+     * @dev emitted on borrow
+     * @param _reserve the address of the reserve
+     * @param _user the address of the user
+     * @param _amount the amount to be deposited
+     * @param _borrowRate the rate at which the user has borrowed
+     * @param _originationFee the origination fee to be paid by the user
+     * @param _borrowBalanceIncrease the balance increase since the last borrow, 0 if it's the first time borrowing
+     * @param _referral the referral number of the action
+     * @param _timestamp the timestamp of the action
+     **/
+    event Borrow(
+        address indexed _reserve,
+        address indexed _user,
+        uint256 _amount,
+        uint256 _borrowRate,
+        uint256 _originationFee,
+        uint256 _borrowBalanceIncrease,
+        uint16 indexed _referral,
+        uint256 _timestamp
+    );
+
     modifier onlyActiveReserve(address _reserve) {
         require(reserveService.getReserveIsActive(_reserve), 'Action requires an active reserve');
         _;
@@ -91,9 +117,9 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);
 
-    function initialize(ILendingPoolAddressService _AddressService) public initializer onlyOwner {
+    function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
-        AddressService = _AddressService;
+        addressService = _addressService;
         refreshConfigInternal();
     }
 
@@ -125,14 +151,6 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
         emit Deposit(_reserve, msg.sender, _amount, _referralCode, block.timestamp);
     }
 
-    function refreshConfigInternal() internal {
-        treasury = ILendingPoolTreasury(AddressService.getLendingPoolTreasuryAddress());
-        reserveService = ILendingPoolReserveService(AddressService.getLendingPoolReserveServiceAddress());
-        userLoanDataService = ILendingPoolUserLoanDataService(
-            AddressService.getLendingPoolUserLoanDataServiceAddress()
-        );
-    }
-
     function redeemUnderlying(
         address _reserve,
         address payable _user,
@@ -148,5 +166,112 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
 
         //solium-disable-next-line
         emit RedeemUnderlying(_reserve, _user, _amount, block.timestamp);
+    }
+
+    /**
+     * @dev data structures for local computations in the borrow() method.
+     */
+
+    struct BorrowLocalVars {
+        uint256 principalBorrowBalance;
+        uint256 currentLtv;
+        uint256 currentLiquidationThreshold;
+        uint256 borrowFee;
+        uint256 requestedBorrowAmountETH;
+        uint256 amountOfCollateralNeededETH;
+        uint256 userCollateralBalanceETH;
+        uint256 userBorrowBalanceETH;
+        uint256 userTotalFeesETH;
+        uint256 borrowBalanceIncrease;
+        uint256 availableLiquidity;
+        uint256 reserveDecimals;
+        uint256 finalUserBorrowRate;
+        bool healthFactorBelowThreshold;
+    }
+
+    /**
+     * @dev Allows users to borrow a specific amount of the reserve currency, provided that the borrower
+     * already deposited enough collateral.
+     * @param _reserve the address of the reserve
+     * @param _amount the amount to be borrowed
+     **/
+    function borrow(
+        address _reserve,
+        uint256 _amount,
+        uint16 _referralCode
+    ) external onlyActiveReserve(_reserve) onlyPositiveAmount(_amount) {
+        // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
+        BorrowLocalVars memory vars;
+
+        require(reserveService.getReserveIsBorrowingEnabled(_reserve), 'Reserve is not enabled for borrowing');
+
+        vars.availableLiquidity = reserveService.getReserveAvailableLiquidity(_reserve);
+
+        require(vars.availableLiquidity >= _amount, 'There is not enough liquidity available in the reserve');
+
+        (
+            ,
+            vars.userCollateralBalanceETH,
+            vars.userBorrowBalanceETH,
+            vars.userTotalFeesETH,
+            vars.currentLtv,
+            vars.currentLiquidationThreshold,
+            ,
+            vars.healthFactorBelowThreshold
+        ) = dataQueryService.calculateUserGlobalData(msg.sender);
+
+        require(vars.userCollateralBalanceETH > 0, 'The collateral balance is 0');
+
+        require(!vars.healthFactorBelowThreshold, 'The borrower can already be liquidated so he cannot borrow more');
+
+        //calculating fees
+        vars.borrowFee = feeService.calculateLoanOriginationFee(msg.sender, _amount);
+
+        vars.amountOfCollateralNeededETH = dataQueryService.calculateCollateralNeededInETH(
+            _reserve,
+            _amount,
+            vars.borrowFee,
+            vars.userBorrowBalanceETH,
+            vars.userTotalFeesETH,
+            vars.currentLtv
+        );
+
+        require(
+            vars.amountOfCollateralNeededETH <= vars.userCollateralBalanceETH,
+            'There is not enough collateral to cover a new borrow'
+        );
+
+        //all conditions passed - borrow is accepted
+        (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = reserveService.updateStateOnBorrow(
+            _reserve,
+            msg.sender,
+            _amount,
+            vars.borrowFee
+        );
+
+        //if we reached this point, we can transfer
+        treasury.transferToUser(_reserve, msg.sender, _amount);
+
+        emit Borrow(
+            _reserve,
+            msg.sender,
+            _amount,
+            vars.finalUserBorrowRate,
+            vars.borrowFee,
+            vars.borrowBalanceIncrease,
+            _referralCode,
+            //solium-disable-next-line
+            block.timestamp
+        );
+    }
+
+    function refreshConfigInternal() internal {
+        treasury = ILendingPoolTreasury(addressService.getLendingPoolTreasuryAddress());
+        reserveService = ILendingPoolReserveService(addressService.getLendingPoolReserveServiceAddress());
+        userLoanDataService = ILendingPoolUserLoanDataService(
+            addressService.getLendingPoolUserLoanDataServiceAddress()
+        );
+        feeService = ILendingPoolFeeService(addressService.getLendingPoolFeeServiceAddress());
+        dataQueryService = ILendingPoolDataQueryService(addressService.getLendingPoolDataQueryServiceAddress());
     }
 }
