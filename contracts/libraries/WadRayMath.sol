@@ -2,7 +2,7 @@
 
 pragma solidity 0.6.12;
 
-import '@openzeppelin/contracts/math/SafeMath.sol';
+import '@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol';
 
 /******************
 @title WadRayMath library

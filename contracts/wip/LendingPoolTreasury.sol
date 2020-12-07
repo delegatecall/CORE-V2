@@ -3,15 +3,15 @@
 
 pragma solidity 0.6.12;
 
-// import '@openzeppelin/contracts/math/SafeMath.sol';
-import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-// import '@openzeppelin/contracts/utils/Address.sol';
+import '@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
-import '../interfaces/ILendingPoolAddressesService.sol';
+
 import '../libraries/WadRayMath.sol';
 import '../libraries/EthAddressLib.sol';
+import '../libraries/SafeERC20.sol';
+
+import '../interfaces/ILendingPoolAddressService.sol';
 
 contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
@@ -20,16 +20,16 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
     using Address for address payable;
 
     address public facadeAddress;
-    ILendingPoolAddressesService private addressesService;
+    ILendingPoolAddressService private AddressService;
 
     modifier onlyLendingPoolFacade {
         require(facadeAddress == msg.sender, 'The caller must be a lending pool facade contract');
         _;
     }
 
-    function initialize(ILendingPoolAddressesService _addressesService) public initializer {
+    function initialize(ILendingPoolAddressService _AddressService) public initializer {
         OwnableUpgradeSafe.__Ownable_init();
-        addressesService = _addressesService;
+        AddressService = _AddressService;
         refreshConfigInternal();
     }
 
@@ -95,6 +95,6 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
     }
 
     function refreshConfigInternal() internal {
-        facadeAddress = addressesService.getLendingPoolFacadeAddress();
+        facadeAddress = AddressService.getLendingPoolFacadeAddress();
     }
 }
