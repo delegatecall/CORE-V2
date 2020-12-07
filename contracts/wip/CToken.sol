@@ -5,8 +5,8 @@ pragma solidity 0.6.12;
 
 import '@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
-import '@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/ERC20.sol';
 
+import '../libraries/ERC20.sol';
 import '../libraries/WadRayMath.sol';
 
 import '../interfaces/ICToken.sol';
@@ -50,12 +50,19 @@ contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
         refreshConfigInternal();
     }
 
-    /**
-     * @dev mints token in the event of users depositing the underlying asset into the lending pool
-     * only lending pools can call this function
-     * @param _account the address receiving the minted tokens
-     * @param _amount the amount of tokens to mint
-     */
+    function balanceOf(address _user) public override view returns (uint256) {
+        //current principal balance of the user
+        uint256 currentPrincipalBalance = super.balanceOf(_user);
+
+        if (currentPrincipalBalance == 0) {
+            return 0;
+        }
+
+        //accruing for himself means that both the principal balance and
+        //the redirected balance partecipate in the interest
+        return calculateCumulatedBalanceInternal(_user, currentPrincipalBalance);
+    }
+
     function mintOnDeposit(address _account, uint256 _amount) external override onlyLendingPool {
         //cumulates the balance of the user
         (, , uint256 balanceIncrease, uint256 index) = cumulateBalanceInternal(_account);
@@ -89,5 +96,14 @@ contract CToken is ICToken, ERC20UpgradeSafe, OwnableUpgradeSafe {
         //updates the user index
         uint256 index = userIndexes[_user] = reserveService.getReserveNormalizedIncome(underlyingAssetAddress);
         return (previousPrincipalBalance, previousPrincipalBalance.add(balanceIncrease), balanceIncrease, index);
+    }
+
+    function calculateCumulatedBalanceInternal(address _user, uint256 _balance) internal view returns (uint256) {
+        return
+            _balance
+                .wadToRay()
+                .rayMul(reserveService.getReserveNormalizedIncome(underlyingAssetAddress))
+                .rayDiv(userIndexes[_user])
+                .rayToWad();
     }
 }
