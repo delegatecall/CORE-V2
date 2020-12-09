@@ -12,7 +12,7 @@ interface ILendingPoolAddressService {
 
     function getLendingPoolReserveServiceAddress() external view returns (address);
 
-    function getLendingPoolUserLoanDataServiceAddress() external view returns (address);
+    function getLendingPoolUserReserveDataServiceAddress() external view returns (address);
 
     function getLendingPoolDataQueryServiceAddress() external view returns (address);
 

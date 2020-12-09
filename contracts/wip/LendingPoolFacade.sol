@@ -6,7 +6,7 @@ pragma solidity 0.6.12;
 // import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
 // import '../configuration/LendingPoolAddressesProvider.sol';
-// import '../libraries/CoreLibrary.sol';
+// import '../libraries/ReserveDataLibrary.sol';
 // import './LendingPoolCore.sol';
 // import './LendingPoolDataProvider.sol';
 // import '../libraries/EthAddressLib.sol';
@@ -21,7 +21,7 @@ import '../libraries/WadRayMath.sol';
 
 import '../interfaces/ILendingPoolFacade.sol';
 import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolUserLoanDataService.sol';
+import '../interfaces/ILendingPoolUserReserveDataService.sol';
 import '../interfaces/ILendingPoolReserveService.sol';
 import '../interfaces/ILendingPoolTreasury.sol';
 import '../interfaces/ICToken.sol';
@@ -42,7 +42,7 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
     ILendingPoolAddressService public addressService;
     ILendingPoolTreasury private treasury;
     ILendingPoolReserveService private reserveService;
-    ILendingPoolUserLoanDataService private userLoanDataService;
+    ILendingPoolUserReserveDataService private userReserveDataService;
     ILendingPoolFeeService private feeService;
     ILendingPoolDataQueryService private dataQueryService;
 
@@ -139,7 +139,11 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
 
         bool isFirstDeposit = IERC20(cToken).balanceOf(msg.sender) == 0;
 
-        reserveService.updateStateOnDeposit(_reserve, msg.sender, _amount, isFirstDeposit);
+        reserveService.updateStateOnDeposit(_reserve, msg.sender, _amount);
+
+        if (isFirstDeposit) {
+            userReserveDataService.enableDepositAsCollateral(_reserve, msg.sender);
+        }
 
         //minting CToken to user 1:1 with the specific exchange rate
         ICToken(cToken).mintOnDeposit(msg.sender, _amount);
@@ -268,8 +272,8 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
     function refreshConfigInternal() internal {
         treasury = ILendingPoolTreasury(addressService.getLendingPoolTreasuryAddress());
         reserveService = ILendingPoolReserveService(addressService.getLendingPoolReserveServiceAddress());
-        userLoanDataService = ILendingPoolUserLoanDataService(
-            addressService.getLendingPoolUserLoanDataServiceAddress()
+        userReserveDataService = ILendingPoolUserReserveDataService(
+            addressService.getLendingPoolUserReserveDataServiceAddress()
         );
         feeService = ILendingPoolFeeService(addressService.getLendingPoolFeeServiceAddress());
         dataQueryService = ILendingPoolDataQueryService(addressService.getLendingPoolDataQueryServiceAddress());

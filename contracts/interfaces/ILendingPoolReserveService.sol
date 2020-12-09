@@ -10,8 +10,7 @@ interface ILendingPoolReserveService {
     function updateStateOnDeposit(
         address _reserve,
         address _user,
-        uint256 _amount,
-        bool _isFirstDeposit
+        uint256 _amount
     ) external;
 
     function updateStateOnRedeem(
