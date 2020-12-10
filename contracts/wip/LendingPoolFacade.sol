@@ -173,27 +173,6 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
     }
 
     /**
-     * @dev data structures for local computations in the borrow() method.
-     */
-
-    struct BorrowLocalVars {
-        uint256 principalBorrowBalance;
-        uint256 currentLtv;
-        uint256 currentLiquidationThreshold;
-        uint256 borrowFee;
-        uint256 requestedBorrowAmountETH;
-        uint256 amountOfCollateralNeededETH;
-        uint256 userCollateralBalanceETH;
-        uint256 userBorrowBalanceETH;
-        uint256 userTotalFeesETH;
-        uint256 borrowBalanceIncrease;
-        uint256 availableLiquidity;
-        uint256 reserveDecimals;
-        uint256 finalUserBorrowRate;
-        bool healthFactorBelowThreshold;
-    }
-
-    /**
      * @dev Allows users to borrow a specific amount of the reserve currency, provided that the borrower
      * already deposited enough collateral.
      * @param _reserve the address of the reserve
@@ -205,54 +184,42 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
         uint16 _referralCode
     ) external onlyActiveReserve(_reserve) onlyPositiveAmount(_amount) {
         // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
-        BorrowLocalVars memory vars;
 
         require(reserveService.getReserveIsBorrowingEnabled(_reserve), 'Reserve is not enabled for borrowing');
 
-        vars.availableLiquidity = reserveService.getReserveAvailableLiquidity(_reserve);
+        uint256 availableLiquidity = reserveService.getReserveAvailableLiquidity(_reserve);
 
-        require(vars.availableLiquidity >= _amount, 'There is not enough liquidity available in the reserve');
-
-        (
-            ,
-            vars.userCollateralBalanceETH,
-            vars.userBorrowBalanceETH,
-            vars.userTotalFeesETH,
-            vars.currentLtv,
-            vars.currentLiquidationThreshold,
-            ,
-            vars.healthFactorBelowThreshold
-        ) = dataQueryService.calculateUserGlobalData(msg.sender);
-
-        require(vars.userCollateralBalanceETH > 0, 'The collateral balance is 0');
-
-        require(!vars.healthFactorBelowThreshold, 'The borrower can already be liquidated so he cannot borrow more');
-
-        //calculating fees
-        vars.borrowFee = feeService.calculateLoanOriginationFee(msg.sender, _amount);
-
-        vars.amountOfCollateralNeededETH = dataQueryService.calculateCollateralNeededInETH(
-            _reserve,
-            _amount,
-            vars.borrowFee,
-            vars.userBorrowBalanceETH,
-            vars.userTotalFeesETH,
-            vars.currentLtv
-        );
+        require(availableLiquidity >= _amount, 'There is not enough liquidity available in the reserve');
 
         require(
-            vars.amountOfCollateralNeededETH <= vars.userCollateralBalanceETH,
-            'There is not enough collateral to cover a new borrow'
+            dataQueryService.getBorrowIsBackedByEnoughCollateral(_reserve, msg.sender, _amount),
+            'There is not enough collateral avaialbe'
         );
+
+        //calculating fees
+        uint256 borrowFee = feeService.calculateLoanOriginationFee(msg.sender, _amount);
+
+        (uint256 principalBalance, uint256 cumulativeBalance) = dataQueryService.getUserBorrowBalances(
+            _reserve,
+            msg.sender
+        );
+
+        uint256 balanceIncrease = cumulativeBalance.sub(principalBalance).add(_amount);
 
         //all conditions passed - borrow is accepted
-        (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = reserveService.updateStateOnBorrow(
+        (uint256 lastVariableBorrowCumulativeIndex, uint256 finalUserBorrowRate) = reserveService.updateStateOnBorrow(
             _reserve,
-            msg.sender,
-            _amount,
-            vars.borrowFee
+            balanceIncrease,
+            borrowFee
         );
 
+        userReserveDataService.updateStateOnBorrow(
+            _reserve,
+            msg.sender,
+            balanceIncrease,
+            lastVariableBorrowCumulativeIndex,
+            borrowFee
+        );
         //if we reached this point, we can transfer
         treasury.transferToUser(_reserve, msg.sender, _amount);
 
@@ -260,9 +227,9 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
             _reserve,
             msg.sender,
             _amount,
-            vars.finalUserBorrowRate,
-            vars.borrowFee,
-            vars.borrowBalanceIncrease,
+            finalUserBorrowRate,
+            borrowFee,
+            balanceIncrease,
             _referralCode,
             //solium-disable-next-line
             block.timestamp

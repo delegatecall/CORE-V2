@@ -3,8 +3,6 @@
 
 pragma solidity 0.6.12;
 
-import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
-import '@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol';
 
 import '../libraries/WadRayMath.sol';
@@ -70,6 +68,15 @@ library ReserveDataLibrary {
         );
 
         return cumulated;
+    }
+
+    function getNormalizedVariableBorrowRate(ReserveData storage _self) internal view returns (uint256) {
+        uint256 cumulatedVariableBorrowInterest = calculateCompoundedInterest(
+            _self.currentVariableBorrowRate,
+            _self.lastUpdateTimestamp
+        );
+
+        return cumulatedVariableBorrowInterest;
     }
 
     /**

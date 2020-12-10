@@ -17,4 +17,6 @@ interface ILendingPoolAddressService {
     function getLendingPoolDataQueryServiceAddress() external view returns (address);
 
     function getLendingPoolFeeServiceAddress() external view returns (address);
+
+    function getPriceOracleAddress() external view returns (address);
 }

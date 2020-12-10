@@ -22,6 +22,7 @@ import '../interfaces/ILendingPoolReserveService.sol';
 contract LendingPoolReserveService is ILendingPoolReserveService, Initializable, OwnableUpgradeSafe {
     using ReserveDataLibrary for ReserveDataLibrary.ReserveData;
     using SafeMath for uint256;
+    using WadRayMath for uint256;
     /**
      * @dev Emitted when the state of a reserve is updated
      * @param reserve the address of the reserve
@@ -44,11 +45,27 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
 
     ILendingPoolAddressService private addressService;
     ILendingPoolFacade private poolFacade;
+    address private treasury;
 
     function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
         addressService = _addressService;
         refreshConfigInternal();
+    }
+
+    /**
+     * @dev initializes a reserve
+     * @param _reserve the address of the reserve
+     * @param _overlyingTokenAddress the address of the overlying aToken contract
+     * @param _decimals the decimals of the reserve currency
+     **/
+    function initReserve(
+        address _reserve,
+        address _overlyingTokenAddress,
+        uint256 _decimals
+    ) external {
+        reserves[_reserve].init(_overlyingTokenAddress, _decimals);
+        addReserveToListInternal(_reserve);
     }
 
     function updateStateOnDeposit(
@@ -69,11 +86,18 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
 
     function updateStateOnBorrow(
         address _reserve,
-        address _user,
         uint256 _amountBorrowed,
         uint256 _borrowFee
-    ) external override returns (uint256, uint256) {
-        return (0, 0);
+    ) external override returns (uint256 lastVariableBorrowCumulativeIndex, uint256 currentVariableBorrowRate) {
+        // getting the previous borrow data of the user
+        ReserveDataLibrary.ReserveData storage reserve = reserves[_reserve];
+
+        reserve.updateCumulativeIndexes();
+        lastVariableBorrowCumulativeIndex = reserve.lastVariableBorrowCumulativeIndex;
+
+        reserve.increaseTotalBorrowsVariable(_amountBorrowed);
+        updateReserveInterestRatesAndTimestampInternal(_reserve, 0, _amountBorrowed);
+        currentVariableBorrowRate = reserve.currentVariableBorrowRate;
     }
 
     function updateStateOnRepay(
@@ -102,11 +126,22 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
     }
 
     function getReserveOverlyingTokenAddress(address _reserve) external override returns (address) {
-        return address(0);
+        return reserves[_reserve].overlyingTokenAddress;
     }
 
     function getReserveNormalizedIncome(address _reserve) external override view returns (uint256) {
-        return 0;
+        ReserveDataLibrary.ReserveData storage reserve = reserves[_reserve];
+        return reserve.getNormalizedIncome();
+    }
+
+    function getReserveNormalizedVariableRate(address _reserve) external override view returns (uint256) {
+        ReserveDataLibrary.ReserveData storage reserve = reserves[_reserve];
+        return reserve.getNormalizedVariableBorrowRate();
+    }
+
+    function getUserUnderlyingAssetBalance(address _reserve, address _user) public view returns (uint256) {
+        IERC20 token = IERC20(reserves[_reserve].overlyingTokenAddress);
+        return token.balanceOf(_user);
     }
 
     /**
@@ -118,9 +153,9 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
         uint256 balance = 0;
 
         if (_reserve == EthAddressLib.ethAddress()) {
-            balance = address(this).balance;
+            balance = treasury.balance;
         } else {
-            balance = IERC20(_reserve).balanceOf(address(this));
+            balance = IERC20(_reserve).balanceOf(treasury);
         }
         return balance;
     }
@@ -141,6 +176,7 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
 
     function refreshConfigInternal() internal {
         poolFacade = ILendingPoolFacade(addressService.getLendingPoolFacadeAddress());
+        treasury = addressService.getLendingPoolTreasuryAddress();
     }
 
     /**
@@ -157,14 +193,16 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
         uint256 _liquidityTaken
     ) internal {
         ReserveDataLibrary.ReserveData storage reserve = reserves[_reserve];
-
         // hardcode varible interest rate
         uint256 newVariableRate = 0.05 * 1e27;
-        uint256 newLiquidityRate = 10;
+
+        uint256 newLiquidityRate = reserve.getTotalBorrows().rayDiv(
+            getReserveAvailableLiquidity(_reserve).add(_liquidityAdded).sub(_liquidityTaken)
+        );
+
         reserve.currentLiquidityRate = newLiquidityRate;
         reserve.currentVariableBorrowRate = newVariableRate;
 
-        //solium-disable-next-line
         reserve.lastUpdateTimestamp = uint40(block.timestamp);
 
         emit ReserveUpdated(
@@ -174,5 +212,14 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
             reserve.lastLiquidityCumulativeIndex,
             reserve.lastVariableBorrowCumulativeIndex
         );
+    }
+
+    /**
+     * @dev adds a reserve to the array of the reserves address
+     **/
+    function addReserveToListInternal(address _reserve) internal {
+        bool reserveAlreadyAdded = false;
+        for (uint256 i = 0; i < reservesList.length; i++) if (reservesList[i] == _reserve) {reserveAlreadyAdded = true;}
+        if (!reserveAlreadyAdded) reservesList.push(_reserve);
     }
 }

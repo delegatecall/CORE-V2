@@ -22,7 +22,6 @@ interface ILendingPoolReserveService {
 
     function updateStateOnBorrow(
         address _reserve,
-        address _user,
         uint256 _amountBorrowed,
         uint256 _borrowFee
     ) external returns (uint256, uint256);
@@ -53,6 +52,8 @@ interface ILendingPoolReserveService {
     function getReserveOverlyingTokenAddress(address _reserve) external returns (address);
 
     function getReserveNormalizedIncome(address _reserve) external view returns (uint256);
+
+    function getReserveNormalizedVariableRate(address _reserve) external view returns (uint256);
 
     /**
      * @dev gets the available liquidity in the reserve. The available liquidity is the balance of the core contract

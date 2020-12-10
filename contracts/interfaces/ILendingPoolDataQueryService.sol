@@ -22,39 +22,14 @@ interface ILendingPoolDataQueryService {
         uint256 _amount
     ) external view returns (bool);
 
-    /**
-     * @dev calculates the user data across the reserves.
-     * @param _user the address of the user
-     **/
-    function calculateUserGlobalData(address _user)
+    function getBorrowIsBackedByEnoughCollateral(
+        address _reserve,
+        address _user,
+        uint256 _amount
+    ) external view returns (bool);
+
+    function getUserBorrowBalances(address _reserve, address _user)
         external
         view
-        returns (
-            uint256 totalLiquidityBalanceETH,
-            uint256 totalCollateralBalanceETH,
-            uint256 totalBorrowBalanceETH,
-            uint256 totalFeesETH,
-            uint256 currentLtv,
-            uint256 currentLiquidationThreshold,
-            uint256 healthFactor,
-            bool healthFactorBelowThreshold
-        );
-
-    /**
-     * @notice calculates the amount of collateral needed in ETH to cover a new borrow.
-     * @param _reserve the reserve from which the user wants to borrow
-     * @param _amount the amount the user wants to borrow
-     * @param _fee the fee for the amount that the user needs to cover
-     * @param _userCurrentBorrowBalanceTH the current borrow balance of the user (before the borrow)
-     * @param _userCurrentLtv the average ltv of the user given his current collateral
-     * @return  the total amount of collateral in ETH to cover the current borrow balance + the new amount + fee
-     **/
-    function calculateCollateralNeededInETH(
-        address _reserve,
-        uint256 _amount,
-        uint256 _fee,
-        uint256 _userCurrentBorrowBalanceTH,
-        uint256 _userCurrentFeesETH,
-        uint256 _userCurrentLtv
-    ) external view returns (uint256);
+        returns (uint256 principalBorrowBalance, uint256 cumulativeBorrowBalance);
 }
