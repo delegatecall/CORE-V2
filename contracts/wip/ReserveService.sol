@@ -12,14 +12,14 @@ import '../libraries/WadRayMath.sol';
 import '../libraries/ReserveDataLibrary.sol';
 import '../libraries/EthAddressLib.sol';
 
-import '../interfaces/ILendingPoolFacade.sol';
-import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolReserveService.sol';
+import '../interfaces/IFacade.sol';
+import '../interfaces/IAddressService.sol';
+import '../interfaces/IReserveService.sol';
 
 /**
  * @title This provides necessary methods to update and query reserve status
  */
-contract LendingPoolReserveService is ILendingPoolReserveService, Initializable, OwnableUpgradeSafe {
+contract ReserveService is IReserveService, Initializable, OwnableUpgradeSafe {
     using ReserveDataLibrary for ReserveDataLibrary.ReserveData;
     using SafeMath for uint256;
     using WadRayMath for uint256;
@@ -43,11 +43,11 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
 
     mapping(address => ReserveDataLibrary.ReserveData) internal reserves;
 
-    ILendingPoolAddressService private addressService;
-    ILendingPoolFacade private poolFacade;
+    IAddressService private addressService;
+    IFacade private poolFacade;
     address private treasury;
 
-    function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
+    function initialize(IAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
         addressService = _addressService;
         refreshConfigInternal();
@@ -175,8 +175,8 @@ contract LendingPoolReserveService is ILendingPoolReserveService, Initializable,
     }
 
     function refreshConfigInternal() internal {
-        poolFacade = ILendingPoolFacade(addressService.getLendingPoolFacadeAddress());
-        treasury = addressService.getLendingPoolTreasuryAddress();
+        poolFacade = IFacade(addressService.getFacadeAddress());
+        treasury = addressService.getTreasuryAddress();
     }
 
     /**

@@ -5,10 +5,10 @@ pragma solidity 0.6.12;
 
 // import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
-// import '../configuration/LendingPoolAddressesProvider.sol';
+// import '../configuration/AddressesProvider.sol';
 // import '../libraries/ReserveDataLibrary.sol';
-// import './LendingPoolCore.sol';
-// import './LendingPoolDataProvider.sol';
+// import './Core.sol';
+// import './DataProvider.sol';
 // import '../libraries/EthAddressLib.sol';
 
 import '@openzeppelin/contracts/utils/Address.sol';
@@ -19,14 +19,14 @@ import '@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/IERC20.so
 
 import '../libraries/WadRayMath.sol';
 
-import '../interfaces/ILendingPoolFacade.sol';
-import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolUserReserveDataService.sol';
-import '../interfaces/ILendingPoolReserveService.sol';
-import '../interfaces/ILendingPoolTreasury.sol';
+import '../interfaces/IFacade.sol';
+import '../interfaces/IAddressService.sol';
+import '../interfaces/IUserReserveDataService.sol';
+import '../interfaces/IReserveService.sol';
+import '../interfaces/ITreasury.sol';
 import '../interfaces/ICToken.sol';
-import '../interfaces/ILendingPoolFeeService.sol';
-import '../interfaces/ILendingPoolDataQueryService.sol';
+import '../interfaces/IFeeService.sol';
+import '../interfaces/IDataQueryService.sol';
 
 /**
  * @title CORE Lending Pool Facade contract
@@ -34,17 +34,17 @@ import '../interfaces/ILendingPoolDataQueryService.sol';
  * @author CORE
  **/
 
-contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeSafe {
+contract Facade is IFacade, Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
     using WadRayMath for uint256;
     using Address for address;
 
-    ILendingPoolAddressService public addressService;
-    ILendingPoolTreasury private treasury;
-    ILendingPoolReserveService private reserveService;
-    ILendingPoolUserReserveDataService private userReserveDataService;
-    ILendingPoolFeeService private feeService;
-    ILendingPoolDataQueryService private dataQueryService;
+    IAddressService public addressService;
+    ITreasury private treasury;
+    IReserveService private reserveService;
+    IUserReserveDataService private userReserveDataService;
+    IFeeService private feeService;
+    IDataQueryService private dataQueryService;
 
     /**
      * @dev emitted on deposit
@@ -117,7 +117,7 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
 
     uint256 public constant UINT_MAX_VALUE = uint256(-1);
 
-    function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
+    function initialize(IAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
         addressService = _addressService;
         refreshConfigInternal();
@@ -237,12 +237,10 @@ contract LendingPoolFacade is ILendingPoolFacade, Initializable, OwnableUpgradeS
     }
 
     function refreshConfigInternal() internal {
-        treasury = ILendingPoolTreasury(addressService.getLendingPoolTreasuryAddress());
-        reserveService = ILendingPoolReserveService(addressService.getLendingPoolReserveServiceAddress());
-        userReserveDataService = ILendingPoolUserReserveDataService(
-            addressService.getLendingPoolUserReserveDataServiceAddress()
-        );
-        feeService = ILendingPoolFeeService(addressService.getLendingPoolFeeServiceAddress());
-        dataQueryService = ILendingPoolDataQueryService(addressService.getLendingPoolDataQueryServiceAddress());
+        treasury = ITreasury(addressService.getTreasuryAddress());
+        reserveService = IReserveService(addressService.getReserveServiceAddress());
+        userReserveDataService = IUserReserveDataService(addressService.getUserReserveDataServiceAddress());
+        feeService = IFeeService(addressService.getFeeServiceAddress());
+        dataQueryService = IDataQueryService(addressService.getDataQueryServiceAddress());
     }
 }

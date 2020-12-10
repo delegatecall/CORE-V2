@@ -8,7 +8,7 @@ pragma solidity 0.6.12;
  * @dev this is the Query part of CQRS, LendPoolFacade is the Command Part
  */
 
-interface ILendingPoolDataQueryService {
+interface IDataQueryService {
     /**
      * @dev check if a specific balance decrease is allowed (i.e. doesn't bring the user borrow position health factor under 1e18)
      * @param _reserve the address of the reserve

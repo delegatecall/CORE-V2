@@ -9,9 +9,9 @@ import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
 import '../libraries/UserReserveDataLibrary.sol';
 import '../libraries/WadRayMath.sol';
 
-import '../interfaces/ILendingPoolUserReserveDataService.sol';
-import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolReserveService.sol';
+import '../interfaces/IUserReserveDataService.sol';
+import '../interfaces/IAddressService.sol';
+import '../interfaces/IReserveService.sol';
 import '../interfaces/IPriceOracle.sol';
 
 /**
@@ -20,7 +20,7 @@ import '../interfaces/IPriceOracle.sol';
  * @author CORE
  **/
 
-contract LendingPoolUserReserveDataService is ILendingPoolUserReserveDataService, Initializable, OwnableUpgradeSafe {
+contract UserReserveDataService is IUserReserveDataService, Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
     struct UserReserveData {
         //principal amount borrowed by the user.
@@ -37,12 +37,12 @@ contract LendingPoolUserReserveDataService is ILendingPoolUserReserveDataService
 
     mapping(address => mapping(address => UserReserveData)) internal usersReserveData;
 
-    ILendingPoolAddressService public addressService;
-    ILendingPoolReserveService private reserveService;
-    ILendingPoolUserReserveDataService private userReserveDataService;
+    IAddressService public addressService;
+    IReserveService private reserveService;
+    IUserReserveDataService private userReserveDataService;
     IPriceOracle private priceOracle;
 
-    function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
+    function initialize(IAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
         addressService = _addressService;
         refreshConfigInternal();

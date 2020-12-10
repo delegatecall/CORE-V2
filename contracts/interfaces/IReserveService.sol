@@ -6,7 +6,7 @@ pragma solidity 0.6.12;
 /**
  * @title This provides necessary methods to update and query reserve status
  */
-interface ILendingPoolReserveService {
+interface IReserveService {
     function updateStateOnDeposit(
         address _reserve,
         address _user,

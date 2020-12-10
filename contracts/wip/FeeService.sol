@@ -5,13 +5,13 @@ pragma solidity 0.6.12;
 
 import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
 
-import '../interfaces/ILendingPoolFeeService.sol';
+import '../interfaces/IFeeService.sol';
 import '../libraries/WadRayMath.sol';
 
 /**
  * @title FeeProvider contract
  **/
-contract FeeProvider is ILendingPoolFeeService, Initializable {
+contract FeeProvider is IFeeService, Initializable {
     using WadRayMath for uint256;
 
     // percentage of the fee to be calculated on the loan amount
@@ -19,7 +19,7 @@ contract FeeProvider is ILendingPoolFeeService, Initializable {
 
     /**
      * @dev initializes the FeeProvider after it's added to the proxy
-     * @param _addressesProvider the address of the LendingPoolAddressesProvider
+     * @param _addressesProvider the address of the AddressesProvider
      */
     function initialize(address _addressesProvider) public initializer {
         /// @notice origination fee is set as default as 25 basis points of the loan amount (0.0025%)

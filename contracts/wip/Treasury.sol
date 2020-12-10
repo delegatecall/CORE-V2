@@ -11,23 +11,23 @@ import '../libraries/WadRayMath.sol';
 import '../libraries/EthAddressLib.sol';
 import '../libraries/SafeERC20.sol';
 
-import '../interfaces/ILendingPoolAddressService.sol';
+import '../interfaces/IAddressService.sol';
 
-contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
+contract Treasury is Initializable, OwnableUpgradeSafe {
     using SafeMath for uint256;
     using WadRayMath for uint256;
     using SafeERC20 for IERC20;
     using Address for address payable;
 
     address public facadeAddress;
-    ILendingPoolAddressService private AddressService;
+    IAddressService private AddressService;
 
-    modifier onlyLendingPoolFacade {
+    modifier onlyFacade {
         require(facadeAddress == msg.sender, 'The caller must be a lending pool facade contract');
         _;
     }
 
-    function initialize(ILendingPoolAddressService _AddressService) public initializer {
+    function initialize(IAddressService _AddressService) public initializer {
         OwnableUpgradeSafe.__Ownable_init();
         AddressService = _AddressService;
         refreshConfigInternal();
@@ -37,7 +37,7 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
         address _reserve,
         address payable _user,
         uint256 _amount
-    ) external onlyLendingPoolFacade {
+    ) external onlyFacade {
         if (_reserve != EthAddressLib.ethAddress()) {
             IERC20(_reserve).safeTransfer(_user, _amount);
         } else {
@@ -52,7 +52,7 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
         address _user,
         uint256 _amount,
         address _destination
-    ) external payable onlyLendingPoolFacade {
+    ) external payable onlyFacade {
         address payable feeAddress = address(uint160(_destination)); //cast the address to payable
 
         if (_token != EthAddressLib.ethAddress()) {
@@ -73,7 +73,7 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
         address _reserve,
         address payable _user,
         uint256 _amount
-    ) external payable onlyLendingPoolFacade {
+    ) external payable onlyFacade {
         if (_reserve != EthAddressLib.ethAddress()) {
             require(msg.value == 0, 'User is sending ETH along with the ERC20 transfer.');
             IERC20(_reserve).safeTransferFrom(_user, address(this), _amount);
@@ -95,6 +95,6 @@ contract LendingPoolTreasury is Initializable, OwnableUpgradeSafe {
     }
 
     function refreshConfigInternal() internal {
-        facadeAddress = AddressService.getLendingPoolFacadeAddress();
+        facadeAddress = AddressService.getFacadeAddress();
     }
 }

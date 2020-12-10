@@ -10,10 +10,10 @@ import '../libraries/ERC20.sol';
 import '../libraries/WadRayMath.sol';
 
 import '../interfaces/ICToken.sol';
-import '../interfaces/ILendingPoolFacade.sol';
-import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolReserveService.sol';
-import '../interfaces/ILendingPoolDataQueryService.sol';
+import '../interfaces/IFacade.sol';
+import '../interfaces/IAddressService.sol';
+import '../interfaces/IReserveService.sol';
+import '../interfaces/IDataQueryService.sol';
 
 /**
  * @title CORE interest bearing liquidty pool ERC20
@@ -44,18 +44,18 @@ contract CToken is ERC20UpgradeSafe, OwnableUpgradeSafe, ICToken {
 
     mapping(address => uint256) private userIndexes;
 
-    ILendingPoolFacade private poolFacade;
-    ILendingPoolAddressService private addressService;
-    ILendingPoolReserveService private reserveService;
-    ILendingPoolDataQueryService private dataQueryService;
+    IFacade private poolFacade;
+    IAddressService private addressService;
+    IReserveService private reserveService;
+    IDataQueryService private dataQueryService;
 
-    modifier onlyLendingPool {
+    modifier only {
         require(msg.sender == address(poolFacade), 'The caller of this function must be a lending pool');
         _;
     }
 
     function initialize(
-        ILendingPoolAddressService _addressService,
+        IAddressService _addressService,
         address _underlyingAsset,
         uint8 _underlyingAssetDecimals,
         string memory _name,
@@ -80,7 +80,7 @@ contract CToken is ERC20UpgradeSafe, OwnableUpgradeSafe, ICToken {
         return calculateCumulatedBalanceInternal(_user, currentPrincipalBalance);
     }
 
-    function mintOnDeposit(address _account, uint256 _amount) external override onlyLendingPool {
+    function mintOnDeposit(address _account, uint256 _amount) external override only {
         //cumulates the balance of the user
         (, , uint256 balanceIncrease, uint256 index) = cumulateBalanceInternal(_account);
 
@@ -130,9 +130,9 @@ contract CToken is ERC20UpgradeSafe, OwnableUpgradeSafe, ICToken {
     }
 
     function refreshConfigInternal() internal {
-        poolFacade = ILendingPoolFacade(addressService.getLendingPoolFacadeAddress());
-        reserveService = ILendingPoolReserveService(addressService.getLendingPoolReserveServiceAddress());
-        dataQueryService = ILendingPoolDataQueryService(addressService.getLendingPoolDataQueryServiceAddress());
+        poolFacade = IFacade(addressService.getFacadeAddress());
+        reserveService = IReserveService(addressService.getReserveServiceAddress());
+        dataQueryService = IDataQueryService(addressService.getDataQueryServiceAddress());
     }
 
     function cumulateBalanceInternal(address _user)

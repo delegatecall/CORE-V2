@@ -9,10 +9,10 @@ import '@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol';
 import '../libraries/WadRayMath.sol';
 
 import '../interfaces/IPriceOracle.sol';
-import '../interfaces/ILendingPoolAddressService.sol';
-import '../interfaces/ILendingPoolUserReserveDataService.sol';
-import '../interfaces/ILendingPoolReserveService.sol';
-import '../interfaces/ILendingPoolDataQueryService.sol';
+import '../interfaces/IAddressService.sol';
+import '../interfaces/IUserReserveDataService.sol';
+import '../interfaces/IReserveService.sol';
+import '../interfaces/IDataQueryService.sol';
 import '../interfaces/ICToken.sol';
 
 /**
@@ -21,14 +21,14 @@ import '../interfaces/ICToken.sol';
  * @author CORE
  **/
 
-contract LendingPoolDataQueryService is ILendingPoolDataQueryService, Initializable, OwnableUpgradeSafe {
+contract DataQueryService is IDataQueryService, Initializable, OwnableUpgradeSafe {
     using WadRayMath for uint256;
-    ILendingPoolAddressService public addressService;
-    ILendingPoolReserveService private reserveService;
-    ILendingPoolUserReserveDataService private userReserveDataService;
+    IAddressService public addressService;
+    IReserveService private reserveService;
+    IUserReserveDataService private userReserveDataService;
     IPriceOracle private priceOracle;
 
-    function initialize(ILendingPoolAddressService _addressService) public initializer onlyOwner {
+    function initialize(IAddressService _addressService) public initializer onlyOwner {
         OwnableUpgradeSafe.__Ownable_init();
         addressService = _addressService;
         refreshConfigInternal();
