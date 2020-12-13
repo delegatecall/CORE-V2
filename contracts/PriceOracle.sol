@@ -19,6 +19,7 @@ contract PriceOracle is Initializable, OwnableUpgradeSafe {
     }
 
     function getCOREBottomPrice() external view returns (uint256) {
+        //TODO calculate properyly
         return coreBottomPrice;
     }
 
@@ -27,6 +28,7 @@ contract PriceOracle is Initializable, OwnableUpgradeSafe {
     }
 
     function getCOREPrice() external view returns (uint256) {
+        //TODO calculate based on uni
         return coreBottomPrice;
     }
 
