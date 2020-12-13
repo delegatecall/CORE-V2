@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
+// COPYRIGHT cVault.finance TEAM
 
 pragma solidity 0.6.12;
 
-import '@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol';
+import '@openzeppelin/contracts/math/SafeMath.sol';
 
 /******************
 @title WadRayMath library
 @author Aave
 @dev Provides mul and div function for wads (decimal numbers with 18 digits precision) and rays (decimals with 27 digits)
- */
+
+*/
 
 library WadRayMath {
     using SafeMath for uint256;
@@ -67,7 +69,10 @@ library WadRayMath {
         return a.mul(WAD_RAY_RATIO);
     }
 
-    //solium-disable-next-line
+    /**
+     * @dev calculates base^exp. The code uses the ModExp precompile
+     * @return z base^exp, in ray
+     */
     function rayPow(uint256 x, uint256 n) internal pure returns (uint256 z) {
         z = n % 2 != 0 ? x : RAY;
 
