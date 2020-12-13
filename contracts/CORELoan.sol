@@ -121,12 +121,12 @@ contract CORELoan is Initializable, OwnableUpgradeSafe {
             .rayDiv(loanData.variableBorrowCumulativeIndex)
             .sub(totalOwned)
             .rayToWad();
-        // console.log(
-        //     'reserveindex',
-        //     totalOwned,
-        //     ethReserveCumulativeIndexAsForNow,
-        //     loanData.variableBorrowCumulativeIndex
-        // );
+        console.log(
+            'reserveindex',
+            totalOwned,
+            ethReserveCumulativeIndexAsForNow,
+            loanData.variableBorrowCumulativeIndex
+        );
         uint256 coreEthPrice = priceOracle.getCOREPrice();
 
         return (
@@ -143,6 +143,7 @@ contract CORELoan is Initializable, OwnableUpgradeSafe {
         updateEthReserveCumulativeIndex();
         updateEthReserveBalanceAndInterestRate(newBorrow, 0);
         updateUserCORELoanDataOnBorrow(_coreAmount, newBorrow);
+        //TODO enable transfer after configuring live testing
         // treasury.transferEthToUser(msg.sender, newBorrow);
         // safeTransfer(CORE_ADDRESS, treasury, _coreAmount);
         emit Borrow(msg.sender, newBorrow, ethReserveData.variableBorrowRate, block.timestamp);

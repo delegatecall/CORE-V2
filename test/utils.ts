@@ -1,19 +1,14 @@
 import { BigNumber } from 'ethers'
-import { network, ethers } from 'hardhat'
+import { ethers } from 'hardhat'
 import { RAY, YEAR_IN_SECONDS } from './constants'
-
+const { provider } = ethers
 export async function getTransactionTimeStamp(txHash: string) {
-  const block = await ethers.provider.getBlock(txHash)
+  const block = await provider.getBlock(txHash)
   return block.timestamp
 }
 
-//RAY is 1e27 for high accurate decimal calulation
-export function mulByRay(num: number): BigNumber {
-  return RAY.mul(num)
-}
-
 export function calculateCompoundedInterest(rate: BigNumber, timeInSec: number): BigNumber {
-  return rate.div(YEAR_IN_SECONDS).add(mulByRay(1)).rayPow(BigNumber.from(timeInSec))
+  return rate.div(YEAR_IN_SECONDS).add(RAY).rayPow(BigNumber.from(timeInSec))
 }
 
 export async function advanceByHours(hours: number) {
@@ -23,23 +18,35 @@ export async function advanceByHours(hours: number) {
 
 export async function impersonate(address: string) {
   console.log(`Impersonating ${address}`)
-  await network.provider.request({
-    method: 'hardhat_impersonateAccount',
-    params: [address],
-  })
+  await ethers.provider.send('hardhat_impersonateAccount', [address])
+}
+
+export async function stopImpersonate(address: string) {
+  await provider.send('hardhat_stopImpersonatingAccount', [address])
 }
 
 export async function resetNetwork() {
-  console.log(network.provider.request)
-  await network.provider.request({
-    method: 'hardhat_reset',
-    params: [
-      {
-        forking: {
-          url: 'https://eth-mainnet.alchemyapi.io/v2/TsLEJAhX87icgMO7ZVyPcpeEgpFEo96O',
-          blockNumber: 11123663,
-        },
+  await provider.send('hardhat_reset', [
+    {
+      forking: {
+        url: 'https://eth-mainnet.alchemyapi.io/v2/TsLEJAhX87icgMO7ZVyPcpeEgpFEo96O',
+        blockNumber: 11123663,
       },
-    ],
-  })
+    },
+  ])
+}
+
+export async function advanceTimeAndBlock(time: number) {
+  await advanceTime(time)
+  await advanceBlock()
+
+  return await provider.getBlock('latest')
+}
+
+export async function advanceTime(time: number) {
+  await provider.send('evm_increaseTime', [time])
+}
+
+export async function advanceBlock() {
+  await provider.send('evm_mine', [])
 }

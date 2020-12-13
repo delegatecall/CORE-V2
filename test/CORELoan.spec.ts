@@ -1,22 +1,33 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 import { expect } from 'chai'
 import { create } from 'domain'
-import { Contract } from 'ethers'
+import { Contract, Signer } from 'ethers'
 import { ethers, upgrades } from 'hardhat'
-import { calculateCompoundedInterest, getTransactionTimeStamp, mulByRay, resetNetwork } from './utils'
+import { RAY, YEAR_IN_SECONDS } from './constants'
+import {
+  advanceTimeAndBlock,
+  calculateCompoundedInterest,
+  getTransactionTimeStamp,
+  impersonate,
+  resetNetwork,
+} from './utils'
 const {
   utils: { parseEther },
   BigNumber,
 } = ethers
+
+const RICH_GUY = '0x5A16552f59ea34E44ec81E58b3817833E9fD5436'
 
 describe('CORELoan Integration test', () => {
   let loan: Contract
   let treasury: Contract
   let priceOracle: Contract
   let users: SignerWithAddress[]
+  let theRichGuy: Signer
 
   beforeEach(async () => {
-    // await resetNetwork()
+    // await impersonate(RICH_GUY)
+    theRichGuy = ethers.provider.getSigner(RICH_GUY)
     const CORELoan = await ethers.getContractFactory('CORELoan')
     loan = await upgrades.deployProxy(CORELoan, { unsafeAllowCustomTypes: true })
     await loan.deployed()
@@ -30,9 +41,9 @@ describe('CORELoan Integration test', () => {
     await priceOracle.deployed()
     await loan.setAddresses(priceOracle.address, treasury.address)
     users = await ethers.getSigners()
-    console.log('Loan Address:', loan.address)
-    console.log('Oracle Address:', priceOracle.address)
-    console.log('Treasury Address:', treasury.address)
+    // console.log('Loan Address:', loan.address)
+    // console.log('Oracle Address:', priceOracle.address)
+    // console.log('Treasury Address:', treasury.address)
   })
 
   it('Should initialze eth reserve data correctly', async () => {
@@ -40,8 +51,8 @@ describe('CORELoan Integration test', () => {
     const createdAt = await getTransactionTimeStamp(loan.deployTransaction.blockHash!)
     const [balance, rate, index, threshold, timestamp] = await loan.getEthReserveData()
     expect(balance).to.equal(0)
-    expect(rate).to.equal(mulByRay(5))
-    expect(index, 'match cumulativeindex').to.equal(mulByRay(1))
+    expect(rate).to.equal(RAY.mul(5))
+    expect(index, 'match cumulativeindex').to.equal(RAY)
     expect(threshold).to.equal(75)
     expect(timestamp).to.equal(createdAt)
   })
@@ -65,7 +76,7 @@ describe('CORELoan Integration test', () => {
     const compoundedInterest = calculateCompoundedInterest(previousInterestRate, timestamp.sub(previousTimestamp))
     const cumulativeindex = compoundedInterest.rayMul(previousIndex)
     expect(balance).to.equal(borrowInEth)
-    expect(rate).to.equal(mulByRay(5))
+    expect(rate).to.equal(RAY.mul(5))
     expect(index, 'match cumulativeindex').to.equal(cumulativeindex)
     expect(threshold).to.equal(75)
     expect(timestamp).to.equal(loanCreatedAt)
@@ -75,7 +86,8 @@ describe('CORELoan Integration test', () => {
     expect(interest).to.equal(0)
     expect(coreAsCollateral).to.equal(coreAmount)
 
-    // TODO fix the timestamp later
-    // .withArgs(users[0].address, expectedBorrow, mulByRay(5), getCreatedAt())
+    // advance block for a day
+    await advanceTimeAndBlock(YEAR_IN_SECONDS.toNumber())
+    //TODO check user core loan data
   })
 })
